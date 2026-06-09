@@ -28,7 +28,9 @@ npm start
 
 A aplicacao fica disponivel em <http://localhost:4200>.
 
-O cliente WebSocket usa o hostname da pagina e acessa o Kong pela porta `8001`.
+O cliente WebSocket usa `window.__RESCUERADIO_CONFIG__.gatewayWsUrl`. Sem uma
+configuração explícita, usa o hostname da página e acessa o Kong pela porta
+`8001`.
 
 ## Testes e build
 
@@ -41,7 +43,16 @@ npm run build
 
 ```bash
 docker build -t rescueradio-web:local .
-docker run --rm -p 4200:80 rescueradio-web:local
+docker run --rm -p 4200:80 -e GATEWAY_WS_URL=ws://localhost:8001 rescueradio-web:local
 ```
 
 Para executar o ambiente completo, use o repositorio `rescueradio-infra`.
+
+## Fluxo de desenvolvimento
+
+- `main`: versões estáveis;
+- `develop`: integração das funcionalidades aprovadas;
+- `feature/*`: desenvolvimento isolado, sempre criado a partir de `develop`.
+
+As branches de funcionalidade devem voltar para `develop` por pull request
+após a aprovação do CI.
