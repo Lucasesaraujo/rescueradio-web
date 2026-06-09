@@ -16,4 +16,13 @@ describe('getGatewayWebSocketUrl', () => {
   it('falls back to the current hostname and Kong port', () => {
     expect(getGatewayWebSocketUrl()).toBe(`ws://${window.location.hostname}:8001`);
   });
+
+  it.each([42, { url: 'ws://invalid' }, ['ws://invalid']])(
+    'falls back when runtime configuration is not a string',
+    (gatewayWsUrl) => {
+      window.__RESCUERADIO_CONFIG__ = { gatewayWsUrl };
+
+      expect(getGatewayWebSocketUrl()).toBe(`ws://${window.location.hostname}:8001`);
+    }
+  );
 });

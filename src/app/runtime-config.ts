@@ -1,5 +1,5 @@
 export type RescueRadioRuntimeConfig = {
-  gatewayWsUrl?: string;
+  gatewayWsUrl?: unknown;
 };
 
 declare global {
@@ -9,7 +9,8 @@ declare global {
 }
 
 export function getGatewayWebSocketUrl(): string {
-  const configuredUrl = window.__RESCUERADIO_CONFIG__?.gatewayWsUrl?.trim();
+  const runtimeValue = window.__RESCUERADIO_CONFIG__?.gatewayWsUrl;
+  const configuredUrl = typeof runtimeValue === 'string' ? runtimeValue.trim() : '';
 
   if (configuredUrl) {
     return configuredUrl.replace(/\/+$/, '');
