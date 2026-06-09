@@ -1,6 +1,7 @@
 import { Component, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { getGatewayWebSocketUrl } from './runtime-config';
 
 type RescueRadioEvent = {
   type: string;
@@ -168,10 +169,8 @@ export class App {
   }
 
   private buildWebSocketUrl(username: string): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const gatewayHost = `${window.location.hostname}:8001`;
-
-    return `${protocol}://${gatewayHost}/ws/channel/${this.channelId}?usuario=${encodeURIComponent(username)}`;
+    const gatewayUrl = getGatewayWebSocketUrl();
+    return `${gatewayUrl}/ws/channel/${this.channelId}?usuario=${encodeURIComponent(username)}`;
   }
 
   private updateView(callback: () => void): void {
