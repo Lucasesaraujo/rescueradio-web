@@ -12,6 +12,44 @@ Aplicacao Angular do RescueRadio para comunicacao em tempo real entre equipes de
 - cliente WebSocket;
 - futuramente, login e controle de acesso por roles.
 
+## Decisao tecnologica
+
+O frontend utiliza Angular 21 com TypeScript. O Angular foi escolhido por
+oferecer uma estrutura organizada para componentes, templates, estilos,
+formularios e testes, alem de atualizacao reativa da interface durante o
+recebimento de eventos em tempo real. O TypeScript tambem permite representar
+explicitamente os contratos das mensagens WebSocket e reduzir erros de
+integracao com a API.
+
+Na arquitetura do RescueRadio, o navegador nao precisa conhecer diretamente o
+container da API. O cliente abre uma conexao WebSocket com o Kong, que encaminha
+o caminho `/ws` para o FastAPI. A interface interpreta os eventos de conexao,
+briefing, mensagens e presenca, mantendo a lista de mensagens e socorristas
+ativos visivel para o usuario.
+
+## Estrutura de pastas
+
+```text
+rescueradio-web/
+|-- src/
+|   |-- app/                    # componente, template, estilos e testes
+|   |-- index.html
+|   |-- main.ts
+|   `-- styles.css
+|-- public/
+|   |-- config.js               # configuracao usada no desenvolvimento
+|   `-- config.template.js      # modelo preenchido no container
+|-- docker-entrypoint.d/        # configuracao runtime do gateway
+|-- Dockerfile
+|-- angular.json
+|-- package.json
+`-- README.md
+```
+
+O modulo `src/app/runtime-config.ts` resolve a URL WebSocket do gateway. Em
+container, o script de entrada gera a configuracao a partir de
+`GATEWAY_WS_URL`, sem exigir um novo build do Angular.
+
 ## Desenvolvimento
 
 Requisitos:
