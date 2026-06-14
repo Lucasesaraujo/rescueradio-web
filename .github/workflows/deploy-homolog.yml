@@ -1,14 +1,13 @@
-name: CI
+name: Homolog
 
 on:
   push:
-    branches: [develop]
-  pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 jobs:
-  test-and-build:
+  validate-homolog:
     runs-on: ubuntu-latest
+    environment: homolog
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,3 +17,4 @@ jobs:
       - run: npm ci
       - run: npm test -- --watch=false
       - run: npm run build
+      - run: echo "Frontend validado para o ambiente de homologacao."
