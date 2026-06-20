@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, ElementRef, NgZone, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, NgZone, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { getGatewayWebSocketUrl } from './runtime-config';
@@ -20,6 +20,9 @@ type RescueRadioMessage = {
   corpo_texto: string;
 };
 
+const ACTIVE_SESSION_STORAGE_KEY = 'rescueradio.activeSession';
+
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -27,7 +30,7 @@ type RescueRadioMessage = {
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App {
+export class App implements OnInit {
   @ViewChild('messagesViewport') messagesViewport?: ElementRef<HTMLElement>;
 
   username = '';
@@ -52,6 +55,19 @@ export class App {
     private cdr: ChangeDetectorRef
   ) {}
 
+  ngOnInit(): void {
+    const activeSession = this.getStoredActiveSession();
+
+    if (!activeSession) {
+      return;
+    }
+
+    this.username = activeSession.username;
+    this.channelId = activeSession.channelId;
+    this.manualDisconnect = false;
+    this.openSocket(true);
+  }
+
   connect(): void {
     this.manualDisconnect = false;
     this.openSocket(false);
@@ -60,6 +76,7 @@ export class App {
   disconnect(): void {
     this.manualDisconnect = true;
     this.clearReconnectTimer();
+    this.clearStoredActiveSession();
     this.socket?.close();
     this.socket = null;
     this.connected = false;
@@ -103,6 +120,7 @@ export class App {
     }
 
     this.username = cleanedUsername;
+    this.storeActiveSession(cleanedUsername);
 
     const url = this.buildWebSocketUrl(cleanedUsername);
 
@@ -205,6 +223,50 @@ export class App {
   private buildWebSocketUrl(username: string): string {
     const gatewayUrl = getGatewayWebSocketUrl();
     return `${gatewayUrl}/ws/channel/${this.channelId}?usuario=${encodeURIComponent(username)}`;
+  }
+
+  private storeActiveSession(username: string): void {
+    localStorage.setItem(
+      ACTIVE_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        username,
+        channelId: this.channelId,
+      })
+    );
+  }
+
+  private getStoredActiveSession(): { username: string; channelId: string } | null {
+    const rawSession = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+
+    if (!rawSession) {
+      return null;
+    }
+
+    try {
+      const session = JSON.parse(rawSession);
+
+      if (
+        typeof session.username !== 'string' ||
+        !session.username.trim() ||
+        typeof session.channelId !== 'string' ||
+        !session.channelId.trim()
+      ) {
+        this.clearStoredActiveSession();
+        return null;
+      }
+
+      return {
+        username: session.username.trim(),
+        channelId: session.channelId.trim(),
+      };
+    } catch {
+      this.clearStoredActiveSession();
+      return null;
+    }
+  }
+
+  private clearStoredActiveSession(): void {
+    localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
   }
 
   private scheduleReconnect(): void {

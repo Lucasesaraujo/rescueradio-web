@@ -46,6 +46,7 @@ class MockWebSocket {
 describe('App', () => {
   beforeEach(async () => {
     MockWebSocket.instances = [];
+    localStorage.clear();
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket);
 
     await TestBed.configureTestingModule({
@@ -55,6 +56,7 @@ describe('App', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    localStorage.clear();
     vi.unstubAllGlobals();
     delete window.__RESCUERADIO_CONFIG__;
   });
@@ -86,6 +88,39 @@ describe('App', () => {
       'ws://gateway.example.com/ws/channel/canal-geral?usuario=Lucas'
     );
     expect(app.connectionStatus).toBe('Conectando');
+    expect(localStorage.getItem('rescueradio.activeSession')).toContain('Lucas');
+  });
+
+  it('restores the active session after a page refresh', () => {
+    localStorage.setItem(
+      'rescueradio.activeSession',
+      JSON.stringify({
+        username: 'Julia',
+        channelId: 'canal-geral',
+      })
+    );
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+
+    expect(app.username).toBe('Julia');
+    expect(app.connectionStatus).toBe('Reconectando');
+    expect(MockWebSocket.instances[0].url).toContain('usuario=Julia');
+  });
+
+  it('clears the active session when the user leaves the channel', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    app.username = 'Lucas';
+    app.connect();
+
+    expect(localStorage.getItem('rescueradio.activeSession')).toContain('Lucas');
+
+    app.disconnect();
+
+    expect(localStorage.getItem('rescueradio.activeSession')).toBeNull();
   });
 
   it('sends a message and shows it locally without waiting for server echo', () => {
