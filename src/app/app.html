@@ -7,12 +7,12 @@
         <p class="subtitle">Canal de rádio digital via texto para equipes de resgate</p>
       </div>
 
-      <div class="status" [class.connected]="connected">
+      <div class="status" [class.connected]="connected" [class.reconnecting]="connectionStatus === 'Reconectando'">
         {{ connectionStatus }}
       </div>
     </header>
 
-    <section class="connect-card" *ngIf="!connected">
+    <section class="connect-card" *ngIf="!connected && connectionStatus !== 'Reconectando'">
       <h2>Entrar no canal</h2>
       <p>Informe seu nome para acessar o canal geral da operação.</p>
 
@@ -28,7 +28,7 @@
       </div>
     </section>
 
-    <section class="radio-layout" *ngIf="connected">
+    <section class="radio-layout" *ngIf="connected || connectionStatus === 'Reconectando'">
       <aside class="sidebar">
         <div class="panel">
           <h2>Canal</h2>
@@ -66,7 +66,7 @@
       </aside>
 
       <section class="chat">
-        <div class="messages">
+        <div class="messages" #messagesViewport>
           <article
             class="message"
             *ngFor="let message of messages"
@@ -90,10 +90,13 @@
             type="text"
             placeholder="Digite uma mensagem para a equipe..."
             [(ngModel)]="messageText"
+            [disabled]="!connected"
             (keyup.enter)="sendMessage()"
           />
 
-          <button type="button" (click)="sendMessage()">Enviar</button>
+          <button type="button" (click)="sendMessage()" [disabled]="!connected || !messageText.trim()">
+            Enviar
+          </button>
         </footer>
       </section>
     </section>

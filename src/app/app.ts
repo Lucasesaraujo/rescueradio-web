@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, NgZone } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, NgZone, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { getGatewayWebSocketUrl } from './runtime-config';
@@ -28,6 +28,8 @@ type RescueRadioMessage = {
   styleUrl: './app.css',
 })
 export class App {
+  @ViewChild('messagesViewport') messagesViewport?: ElementRef<HTMLElement>;
+
   username = '';
   messageText = '';
   channelId = 'canal-geral';
@@ -41,70 +43,27 @@ export class App {
   systemEvents: string[] = [];
   members: { usuario: string; status: string }[] = [];
 
+  private manualDisconnect = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly reconnectDelayMs = 2000;
+
   constructor(
     private zone: NgZone,
     private cdr: ChangeDetectorRef
   ) {}
 
   connect(): void {
-    if (
-      this.socket &&
-      (
-        this.socket.readyState === WebSocket.OPEN ||
-        this.socket.readyState === WebSocket.CONNECTING
-      )
-    ) {
-      return;
-    }
-
-    const cleanedUsername = this.username.trim();
-
-    if (!cleanedUsername) {
-      alert('Informe seu nome antes de entrar no canal.');
-      return;
-    }
-
-    this.username = cleanedUsername;
-
-    const url = this.buildWebSocketUrl(cleanedUsername);
-
-    this.socket = new WebSocket(url);
-    this.connectionStatus = 'Conectando...';
-
-    this.socket.onopen = () => {
-      this.updateView(() => {
-        this.connected = true;
-        this.connectionStatus = 'Conectado';
-        this.addSystemEvent(`${cleanedUsername} conectado ao canal.`);
-      });
-    };
-
-    this.socket.onmessage = (event) => {
-      this.updateView(() => {
-        const data: RescueRadioEvent = JSON.parse(event.data);
-        this.handleSocketEvent(data);
-      });
-    };
-
-    this.socket.onerror = () => {
-      this.updateView(() => {
-        this.connectionStatus = 'Erro de conexão';
-        this.addSystemEvent('Erro na conexão com o canal.');
-      });
-    };
-
-    this.socket.onclose = () => {
-      this.updateView(() => {
-        this.connected = false;
-        this.connectionStatus = 'Desconectado';
-        this.addSystemEvent('Conexão encerrada.');
-      });
-    };
+    this.manualDisconnect = false;
+    this.openSocket(false);
   }
 
   disconnect(): void {
+    this.manualDisconnect = true;
+    this.clearReconnectTimer();
     this.socket?.close();
     this.socket = null;
+    this.connected = false;
+    this.connectionStatus = 'Desconectado';
   }
 
   sendMessage(): void {
@@ -123,7 +82,80 @@ export class App {
     };
 
     this.socket.send(JSON.stringify(message));
+    this.messages.push(message);
     this.messageText = '';
+    this.scrollMessagesToBottom();
+  }
+
+  private openSocket(isReconnect: boolean): void {
+    if (
+      this.socket &&
+      (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
+    const cleanedUsername = this.username.trim();
+
+    if (!cleanedUsername) {
+      alert('Informe seu nome antes de entrar no canal.');
+      return;
+    }
+
+    this.username = cleanedUsername;
+
+    const url = this.buildWebSocketUrl(cleanedUsername);
+
+    this.socket = new WebSocket(url);
+    this.connectionStatus = isReconnect ? 'Reconectando' : 'Conectando';
+
+    this.socket.onopen = () => {
+      this.updateView(() => {
+        this.clearReconnectTimer();
+        this.connected = true;
+        this.connectionStatus = 'Conectado';
+        this.addSystemEvent(
+          isReconnect
+            ? `${cleanedUsername} reconectado ao canal.`
+            : `${cleanedUsername} conectado ao canal.`
+        );
+      });
+    };
+
+    this.socket.onmessage = (event) => {
+      this.updateView(() => {
+        try {
+          const data: RescueRadioEvent = JSON.parse(event.data);
+          this.handleSocketEvent(data);
+        } catch {
+          this.addSystemEvent('Evento invalido recebido do servidor.');
+        }
+      });
+    };
+
+    this.socket.onerror = () => {
+      this.updateView(() => {
+        this.connectionStatus = 'Erro de conexao';
+        this.addSystemEvent('Erro na conexao com o canal.');
+      });
+    };
+
+    this.socket.onclose = () => {
+      this.updateView(() => {
+        this.connected = false;
+        this.socket = null;
+
+        if (this.manualDisconnect) {
+          this.connectionStatus = 'Desconectado';
+          this.addSystemEvent('Conexao encerrada.');
+          return;
+        }
+
+        this.connectionStatus = 'Reconectando';
+        this.addSystemEvent('Conexao perdida. Tentando reconectar...');
+        this.scheduleReconnect();
+      });
+    };
   }
 
   private handleSocketEvent(event: RescueRadioEvent): void {
@@ -135,11 +167,13 @@ export class App {
       case 'BRIEFING':
         this.messages = event.messages ?? [];
         this.addSystemEvent(`Briefing recebido com ${this.messages.length} mensagem(ns).`);
+        this.scrollMessagesToBottom();
         break;
 
       case 'MESSAGE_RECEIVED':
         if (event.payload) {
           this.messages.push(event.payload);
+          this.scrollMessagesToBottom();
         }
         break;
 
@@ -171,6 +205,38 @@ export class App {
   private buildWebSocketUrl(username: string): string {
     const gatewayUrl = getGatewayWebSocketUrl();
     return `${gatewayUrl}/ws/channel/${this.channelId}?usuario=${encodeURIComponent(username)}`;
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer !== null) {
+      return;
+    }
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.openSocket(true);
+    }, this.reconnectDelayMs);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  private scrollMessagesToBottom(): void {
+    setTimeout(() => {
+      const viewport = this.messagesViewport?.nativeElement;
+
+      if (!viewport) {
+        return;
+      }
+
+      viewport.scrollTop = viewport.scrollHeight;
+    });
   }
 
   private updateView(callback: () => void): void {
