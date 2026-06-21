@@ -69,6 +69,12 @@ h2 {
   background: rgba(34, 197, 94, 0.12);
 }
 
+.status.reconnecting {
+  color: #fde68a;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
 .connect-card,
 .panel,
 .chat {
@@ -115,6 +121,12 @@ button {
 
 button:hover {
   background: #1d4ed8;
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 button.secondary {
