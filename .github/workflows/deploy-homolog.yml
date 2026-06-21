@@ -1,0 +1,20 @@
+name: Homolog
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validate-homolog:
+    runs-on: ubuntu-latest
+    environment: homolog
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --watch=false
+      - run: npm run build
+      - run: echo "Frontend validado para o ambiente de homologacao."
