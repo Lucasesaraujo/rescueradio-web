@@ -10,7 +10,7 @@ import {
 } from "@/components/OccurrenceMap";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { createCircularCoverageArea } from "@/lib/geo";
+import { createCircularCoverageArea, loadLocalCoverageAreasForCities } from "@/lib/geo";
 import { normalizeOccurrence, normalizeOperator } from "@/lib/rescueradio";
 import { Crosshair, Filter, MapPin, RefreshCw, Users, X, Plus, Check } from "lucide-react";
 
@@ -195,6 +195,8 @@ function MapPage() {
   const [newId, setNewId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [recenterToken, setRecenterToken] = useState(0);
+  const [localCoverageAreas, setLocalCoverageAreas] = useState<CoverageArea[]>([]);
+  const [coverageNotice, setCoverageNotice] = useState("");
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   const baseOptions = bases.length ? bases : [DEFAULT_BASE];
@@ -203,12 +205,17 @@ function MapPage() {
     () => coverageForBase(selectedBaseId, selectedBase),
     [selectedBaseId, selectedBase],
   );
-  const selectedCoverageCities = selectedBase?.coverage_cities?.length
-    ? selectedBase.coverage_cities
-    : selectedBase?.city
-      ? [selectedBase.city]
-      : ["Recife", "Olinda", "Jaboatao dos Guararapes", "Paulista"];
-  const mapCoverageAreas = selectedCoverage.areas;
+  const selectedCoverageCities = useMemo(
+    () =>
+      selectedBase?.coverage_cities?.length
+        ? selectedBase.coverage_cities
+        : selectedBase?.city
+          ? [selectedBase.city]
+          : ["Recife", "Olinda", "Jaboatao dos Guararapes", "Paulista"],
+    [selectedBase],
+  );
+  const selectedCoverageCitiesKey = selectedCoverageCities.join("|");
+  const mapCoverageAreas = localCoverageAreas.length ? localCoverageAreas : selectedCoverage.areas;
 
   const baseCenter: [number, number] = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -330,6 +337,29 @@ function MapPage() {
   useEffect(() => {
     if (showTeams) loadTeams();
   }, [loadTeams, showTeams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCoverageNotice("Carregando fronteiras locais...");
+    loadLocalCoverageAreasForCities(selectedCoverageCities)
+      .then((areas) => {
+        if (cancelled) return;
+        setLocalCoverageAreas(areas);
+        setCoverageNotice(
+          areas.length
+            ? "Fronteiras municipais locais ativas."
+            : "Cobertura estimada localmente a partir da coordenada da base.",
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLocalCoverageAreas([]);
+        setCoverageNotice("Cobertura estimada localmente a partir da coordenada da base.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCoverageCities, selectedCoverageCitiesKey]);
 
   useEffect(() => {
     setCenter(baseCenter);
@@ -631,7 +661,7 @@ function MapPage() {
             ))}
           </div>
           <div className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Cobertura estimada localmente a partir da coordenada da base.
+            {coverageNotice || "Cobertura estimada localmente a partir da coordenada da base."}
           </div>
         </div>
 
