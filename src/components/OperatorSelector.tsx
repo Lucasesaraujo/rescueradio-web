@@ -85,7 +85,7 @@ export function OperatorSelector({ baseId, selected, onChange }: Props) {
           <option value="">Todos status</option>
           <option value="disponivel">Disponivel</option>
           <option value="em_operacao">Em operacao</option>
-          <option value="indisponivel">Ausente</option>
+          <option value="ausente">Ausente</option>
         </select>
         <input
           value={skill}
@@ -127,8 +127,7 @@ export function OperatorSelector({ baseId, selected, onChange }: Props) {
                         {o.display_name || o.username}
                       </div>
                       <div className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {o.funcao || "-"}{" "}
-                        {o.competencias?.length ? `- ${o.competencias.join(", ")}` : ""}
+                        {o.competencias?.length ? o.competencias.join(", ") : "-"}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

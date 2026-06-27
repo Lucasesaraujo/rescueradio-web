@@ -38,8 +38,7 @@ export function isProfileComplete(p: Profile | null): boolean {
     String(p.full_name || p.operational_name || p.nome_operacional)
       .trim()
       .split(/\s+/).length >= 2 &&
-    p.base_id &&
-    (p.function || p.funcao),
+    p.base_id,
   );
 }
 

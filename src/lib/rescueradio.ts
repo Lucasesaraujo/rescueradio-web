@@ -5,6 +5,7 @@ export interface RescueUser {
   display_name?: string;
   role: Role;
   base_id?: string;
+  uf_scope?: string | null;
   profile?: RescueProfile | null;
   [key: string]: any;
 }
@@ -65,8 +66,7 @@ export function normalizeProfile(
       typeof status.complete === "boolean"
         ? status.complete
         : Boolean(raw.full_name || raw.operational_name || raw.nome_operacional) &&
-          Boolean(raw.base_id) &&
-          Boolean(raw.function || raw.funcao),
+          Boolean(raw.base_id),
   };
 }
 
@@ -76,7 +76,6 @@ export function profileToApiPayload(form: {
   callsign?: string;
   nome_operacional: string;
   base_id: string;
-  funcao: string;
   contato: string;
   status: string;
   competencias: string | string[];
@@ -93,7 +92,7 @@ export function profileToApiPayload(form: {
     callsign: form.callsign?.trim(),
     operational_name: form.nome_operacional.trim(),
     base_id: form.base_id.trim(),
-    function: form.funcao.trim(),
+    function: "",
     contact: form.contato.trim(),
     status: form.status,
     skills,

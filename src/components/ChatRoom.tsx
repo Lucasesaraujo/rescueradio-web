@@ -787,7 +787,7 @@ function OperatorRow({ member, offline }: { member: Member; offline?: boolean })
   const statusTone =
     member.status === "em_operacao"
       ? "text-destructive"
-      : member.status === "indisponivel"
+      : member.status === "ausente" || member.status === "indisponivel"
         ? "text-[color:var(--color-warning)]"
         : offline
           ? "text-muted-foreground"

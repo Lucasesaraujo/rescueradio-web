@@ -1,8 +1,8 @@
-import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth, isProfileComplete } from "@/lib/auth";
 import { api } from "@/lib/api";
-import { Radar, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, Radar, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
@@ -12,20 +12,16 @@ interface Base {
   id: string;
   name?: string;
   city?: string;
-}
-interface OperatorFunction {
-  id: string;
-  label: string;
+  uf?: string;
 }
 
 function OnboardingPage() {
   const { user, profile, loading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [bases, setBases] = useState<Base[]>([]);
-  const [functions, setFunctions] = useState<OperatorFunction[]>([]);
+  const [selectedBaseId, setSelectedBaseId] = useState("");
   const [form, setForm] = useState({
     full_name: "",
-    funcao: "",
     contato: "",
     competencias: "",
   });
@@ -34,23 +30,23 @@ function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   const lockedBaseId = user?.base_id || profile?.base_id || "";
-  const selectedBase = bases.find((base) => base.id === lockedBaseId);
+  const baseId = lockedBaseId || selectedBaseId;
+  const selectedBase = bases.find((base) => base.id === baseId);
 
   useEffect(() => {
     api<Base[]>("/bases")
-      .then(setBases)
+      .then((items) => {
+        setBases(items);
+        if (!lockedBaseId && items[0]?.id) setSelectedBaseId((current) => current || items[0].id);
+      })
       .catch(() => setBases([]));
-    api<OperatorFunction[]>("/functions")
-      .then(setFunctions)
-      .catch(() => setFunctions([]));
-  }, []);
+  }, [lockedBaseId]);
 
   useEffect(() => {
     if (profile) {
       setForm((current) => ({
         ...current,
         full_name: profile.full_name || profile.operational_name || "",
-        funcao: profile.funcao || profile.function || "",
         contato: profile.contato || profile.contact || "",
         competencias: (profile.competencias || profile.skills || []).join(", "),
       }));
@@ -58,7 +54,7 @@ function OnboardingPage() {
   }, [profile]);
 
   const identity = useMemo(() => deriveIdentity(form.full_name), [form.full_name]);
-  const errors = useMemo(() => validate(form, lockedBaseId), [form, lockedBaseId]);
+  const errors = useMemo(() => validate(form, baseId), [form, baseId]);
   const canSubmit = Object.keys(errors).length === 0;
 
   if (loading) return null;
@@ -67,7 +63,7 @@ function OnboardingPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ full_name: true, base_id: true, funcao: true, contato: true });
+    setTouched({ full_name: true, base_id: true, contato: true });
     if (!canSubmit) return;
     setBusy(true);
     setError(null);
@@ -79,8 +75,8 @@ function OnboardingPage() {
           display_name: identity.displayName,
           callsign: identity.callsign,
           operational_name: identity.displayName,
-          base_id: lockedBaseId,
-          function: form.funcao,
+          base_id: baseId,
+          function: "",
           contact: form.contato.trim(),
           status: "disponivel",
           skills: parseSkills(form.competencias),
@@ -123,33 +119,40 @@ function OnboardingPage() {
             />
           </Field>
 
-          <div className="sm:col-span-2 rounded-md border border-primary/25 bg-primary/10 p-3 text-xs">
+          <div className="rounded-md border border-primary/25 bg-primary/10 p-3 text-xs sm:col-span-2">
             <div className="mb-2 flex items-center gap-2 font-semibold text-primary">
               <ShieldCheck className="h-3.5 w-3.5" />
-              Dados travados pelo convite
+              Escopo recebido pelo convite
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
-              <Info label="Base" value={selectedBase?.name || lockedBaseId || "Sem base"} />
-              <Info label="Perfil" value={user.role} />
+              <Info label="Papel" value={user.role} />
+              <Info label="UF" value={user.uf_scope || selectedBase?.uf || "-"} />
               <Info label="Nome de exibicao" value={identity.displayName || "-"} />
             </div>
           </div>
 
-          <Field label="Funcao operacional" error={touched.funcao ? errors.funcao : ""}>
-            <select
-              required
-              value={form.funcao}
-              onBlur={() => setTouched((value) => ({ ...value, funcao: true }))}
-              onChange={(e) => setForm({ ...form, funcao: e.target.value })}
-              className={inputCls(!!(touched.funcao && errors.funcao))}
-            >
-              <option value="">Selecione...</option>
-              {functions.map((fn) => (
-                <option key={fn.id} value={fn.label}>
-                  {fn.label}
-                </option>
-              ))}
-            </select>
+          <Field label="Base operacional" error={touched.base_id ? errors.base_id : ""} full>
+            {lockedBaseId ? (
+              <input
+                readOnly
+                value={selectedBase?.name || lockedBaseId}
+                className={`${inputCls(false)} opacity-75`}
+              />
+            ) : (
+              <select
+                value={selectedBaseId}
+                onBlur={() => setTouched((value) => ({ ...value, base_id: true }))}
+                onChange={(e) => setSelectedBaseId(e.target.value)}
+                className={inputCls(!!(touched.base_id && errors.base_id))}
+              >
+                <option value="">Selecione...</option>
+                {bases.map((base) => (
+                  <option key={base.id} value={base.id}>
+                    {base.name || base.id} {base.uf ? `- ${base.uf}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
 
           <Field label="Contato operacional" error={touched.contato ? errors.contato : ""}>
@@ -163,7 +166,7 @@ function OnboardingPage() {
             />
           </Field>
 
-          <Field label="Competencias" full>
+          <Field label="Competencias">
             <input
               value={form.competencias}
               onChange={(e) => setForm({ ...form, competencias: e.target.value })}
@@ -173,7 +176,7 @@ function OnboardingPage() {
           </Field>
 
           {error && (
-            <div className="sm:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive sm:col-span-2">
               {error}
             </div>
           )}
@@ -193,13 +196,12 @@ function OnboardingPage() {
   );
 }
 
-function validate(form: { full_name: string; funcao: string; contato: string }, baseId: string) {
+function validate(form: { full_name: string; contato: string }, baseId: string) {
   const errors: Record<string, string> = {};
   if (form.full_name.trim().split(/\s+/).length < 2) {
     errors.full_name = "Informe nome e sobrenome.";
   }
-  if (!baseId) errors.base_id = "Convite sem base vinculada.";
-  if (!form.funcao) errors.funcao = "Selecione sua funcao.";
+  if (!baseId) errors.base_id = "Selecione uma base operacional.";
   if (form.contato.trim().length < 3) errors.contato = "Informe radio, telefone ou contato.";
   return errors;
 }

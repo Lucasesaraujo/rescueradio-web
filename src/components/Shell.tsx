@@ -60,13 +60,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const statusLabel = useMemo(() => {
     if (!user) return "Offline";
     if (currentStatus === "em_operacao") return "Em operacao";
-    if (currentStatus === "indisponivel") return "Ausente";
+    if (currentStatus === "ausente" || currentStatus === "indisponivel") return "Ausente";
     return "Disponivel";
   }, [currentStatus, user]);
   const statusTone =
     currentStatus === "em_operacao"
       ? "text-destructive"
-      : currentStatus === "indisponivel"
+      : currentStatus === "ausente" || currentStatus === "indisponivel"
         ? "text-[color:var(--color-warning)]"
         : "text-primary";
 
@@ -79,7 +79,7 @@ export function Shell({ children }: { children: ReactNode }) {
         json: {
           operational_name: profile.operational_name || profile.nome_operacional || "",
           base_id: profile.base_id || "",
-          function: profile.function || profile.funcao || "",
+          function: "",
           contact: profile.contact || profile.contato || "",
           status,
           skills: profile.skills || profile.competencias || [],
@@ -228,7 +228,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <option className="bg-surface" value="disponivel">
                   Disponivel
                 </option>
-                <option className="bg-surface" value="indisponivel">
+                <option className="bg-surface" value="ausente">
                   Ausente
                 </option>
                 <option className="bg-surface" value="em_operacao">
