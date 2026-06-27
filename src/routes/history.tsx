@@ -100,6 +100,16 @@ function HistoryPage() {
     });
   }, [ops, filters, profile, user]);
 
+  useEffect(() => {
+    if (!filtered.length) {
+      if (selected) setSelected(null);
+      return;
+    }
+    if (!selected || !filtered.some((item) => item.id === selected.id)) {
+      setSelected(filtered[0]);
+    }
+  }, [filtered, selected]);
+
   return (
     <div className="grid h-full min-h-0 grid-cols-1 md:grid-cols-[340px_minmax(0,1fr)]">
       <aside className="flex min-h-0 flex-col border-b border-border bg-surface md:border-b-0 md:border-r">

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 const map: Record<string, { label: string; color: string }> = {
   disponivel: { label: "Disponivel", color: "text-primary" },
   em_operacao: { label: "Em operacao", color: "text-destructive" },
+  ausente: { label: "Ausente", color: "text-[color:var(--color-warning)]" },
   indisponivel: { label: "Ausente", color: "text-[color:var(--color-warning)]" },
   connected: { label: "Conectado", color: "text-primary" },
   connecting: { label: "Conectando", color: "text-[color:var(--color-warning)]" },

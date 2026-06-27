@@ -35,11 +35,8 @@ export function isProfileComplete(p: Profile | null): boolean {
   if (typeof p.complete === "boolean") return p.complete;
   return Boolean(
     (p.full_name || p.operational_name || p.nome_operacional) &&
-    String(p.full_name || p.operational_name || p.nome_operacional)
-      .trim()
-      .split(/\s+/).length >= 2 &&
-    p.base_id &&
-    (p.function || p.funcao),
+    String(p.full_name || p.operational_name || p.nome_operacional).trim().length >= 6 &&
+    p.base_id,
   );
 }
 
