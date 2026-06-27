@@ -20,7 +20,7 @@ const SERVICES = [
   { name: "Kong", url: "http://localhost:8001/health", desc: "Gateway de roteamento" },
   { name: "Prometheus", url: "http://localhost:9090", desc: "Metricas em /metrics" },
   { name: "Grafana", url: "http://localhost:3000", desc: "Dashboards visuais" },
-  { name: "Loki", url: "http://localhost:3100", desc: "Logs agregados" },
+  { name: "Loki", url: "http://localhost:3100/ready", desc: "Status do agregador de logs" },
 ];
 
 function ObsPage() {
@@ -75,7 +75,8 @@ function ObsPage() {
 
       <div className="mt-4 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
         Metricas Prometheus expostas em <span className="font-mono text-foreground">/metrics</span>{" "}
-        nos servicos instrumentados.
+        nos servicos instrumentados. Logs do Loki devem ser consultados pelo{" "}
+        <span className="font-mono text-foreground">Grafana &gt; Explore &gt; Loki</span>.
       </div>
     </div>
   );
