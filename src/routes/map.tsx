@@ -164,6 +164,20 @@ function coordinateForBase(base?: BaseInfo): [number, number] | null {
   return [lat, lng];
 }
 
+function centerFromCoverageAreas(areas: CoverageArea[]): [number, number] | null {
+  const points = areas.flatMap((area) => area.points || []);
+  if (!points.length) return null;
+  const total = points.reduce(
+    (acc, [lat, lng]) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return acc;
+      return { lat: acc.lat + lat, lng: acc.lng + lng, count: acc.count + 1 };
+    },
+    { lat: 0, lng: 0, count: 0 },
+  );
+  if (!total.count) return null;
+  return [total.lat / total.count, total.lng / total.count];
+}
+
 function normPrio(p: any): Priority {
   const v = String(p || "medio").toLowerCase();
   if (v === "critico" || v === "critico") return "critico";
@@ -229,11 +243,13 @@ function MapPage() {
     const selectedBase = bases.find((b) => b.id === selectedBaseId);
     const selectedBaseCoord = coordinateForBase(selectedBase);
     if (selectedBaseCoord) return selectedBaseCoord;
+    const coverageCenter = centerFromCoverageAreas(localCoverageAreas);
+    if (coverageCenter) return coverageCenter;
     const b: any = (profile as any)?.base;
     const profileBaseCoord = coordinateForBase(b);
     if (profileBaseCoord) return profileBaseCoord;
     return selectedCoverage.center;
-  }, [bases, profile, selectedBaseId, selectedCoverage.center]);
+  }, [bases, profile, selectedBaseId, selectedCoverage.center, localCoverageAreas]);
   const [center, setCenter] = useState<[number, number]>(baseCenter);
 
   const auditFocus = useMemo(() => {
@@ -268,7 +284,8 @@ function MapPage() {
   const focusBase = (baseId = selectedBaseId) => {
     const selectedBase = bases.find((b) => b.id === baseId);
     const fallback = coverageForBase(baseId, selectedBase).center;
-    const next: [number, number] = coordinateForBase(selectedBase) || fallback;
+    const next: [number, number] =
+      coordinateForBase(selectedBase) || centerFromCoverageAreas(localCoverageAreas) || fallback;
     setCenter(next);
     setRecenterToken((v) => v + 1);
   };

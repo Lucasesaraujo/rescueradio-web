@@ -9,6 +9,9 @@ import {
   Shield,
   LogOut,
   Menu,
+  ChevronDown,
+  Building2,
+  Users,
   PanelLeftClose,
   PanelLeftOpen,
   Radar,
@@ -22,7 +25,18 @@ import { normalizeChatMessage, normalizeOperation } from "@/lib/rescueradio";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 
-type NavItem = { to: string; label: string; icon: typeof MessageSquare; roles?: string[] };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof MessageSquare;
+  roles?: string[];
+  children?: Array<{
+    to: string;
+    label: string;
+    icon: typeof MessageSquare;
+    search?: Record<string, string>;
+  }>;
+};
 
 const NAV: NavItem[] = [
   { to: "/chat", label: "Central de Comunicação", icon: MessageSquare },
@@ -35,7 +49,16 @@ const NAV: NavItem[] = [
     icon: Activity,
     roles: ["comandante", "admin"],
   },
-  { to: "/admin", label: "Gestão de Usuários", icon: Shield, roles: ["admin"] },
+  {
+    to: "/admin",
+    label: "Gestão do usuário",
+    icon: Shield,
+    roles: ["admin"],
+    children: [
+      { to: "/admin", label: "Usuários", icon: Users, search: { section: "users" } },
+      { to: "/admin", label: "Bases", icon: Building2, search: { section: "bases" } },
+    ],
+  },
 ];
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -45,8 +68,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const [statusBusy, setStatusBusy] = useState(false);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [assignmentMessages, setAssignmentMessages] = useState<any[]>([]);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(true);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const routeSearch = useRouterState({ select: (s) => s.location.search as any });
   const seenAssignments = useRef<Set<string>>(new Set());
 
   const handleLogout = () => {
@@ -55,6 +80,7 @@ export function Shell({ children }: { children: ReactNode }) {
   };
 
   const visible = NAV.filter((i) => !i.roles || (user && i.roles.includes(user.role)));
+  const adminSection = getAdminSection(routeSearch);
 
   const currentStatus = (profile?.status as string) || "disponivel";
   const statusLabel = useMemo(() => {
@@ -183,6 +209,74 @@ export function Shell({ children }: { children: ReactNode }) {
           {visible.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
+            if (item.children?.length) {
+              return (
+                <div key={item.to} className="mb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (collapsed) {
+                        navigate({ to: item.to, search: { section: "users" } as any });
+                        setOpen(false);
+                        return;
+                      }
+                      setAdminMenuOpen((value) => !value);
+                    }}
+                    className={cn(
+                      "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                      collapsed && "md:justify-center md:px-2",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                    )}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} />
+                    <span
+                      className={cn("min-w-0 flex-1 truncate text-left", collapsed && "md:hidden")}
+                    >
+                      {item.label}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 transition-transform",
+                        adminMenuOpen && "rotate-180",
+                        collapsed && "md:hidden",
+                      )}
+                    />
+                  </button>
+                  {adminMenuOpen && !collapsed && (
+                    <div className="mt-1 space-y-0.5 pl-7">
+                      {item.children.map((child) => {
+                        const ChildIcon = child.icon;
+                        const childActive =
+                          pathname === child.to &&
+                          (child.search?.section || "users") === adminSection;
+                        return (
+                          <Link
+                            key={`${child.to}-${child.search?.section || ""}`}
+                            to={child.to}
+                            search={child.search as any}
+                            onClick={() => setOpen(false)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+                              childActive
+                                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                            )}
+                          >
+                            <ChildIcon
+                              className={cn("h-3.5 w-3.5", childActive && "text-primary")}
+                            />
+                            <span className="truncate">{child.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             return (
               <Link
                 key={item.to}
@@ -301,7 +395,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">
-                {visible.find((v) => pathname.startsWith(v.to))?.label || "Cockpit"}
+                {currentSectionLabel(pathname, adminSection, visible)}
               </div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 RescueRadio - Operacao tatica
@@ -336,6 +430,20 @@ export function Shell({ children }: { children: ReactNode }) {
 
 function assignmentKey(username: string, operationId: string) {
   return `rescueradio:assignment-ack:${username}:${operationId}`;
+}
+
+function getAdminSection(search: any) {
+  if (typeof search === "string") {
+    return new URLSearchParams(search).get("section") === "bases" ? "bases" : "users";
+  }
+  return search?.section === "bases" ? "bases" : "users";
+}
+
+function currentSectionLabel(pathname: string, adminSection: string, visible: NavItem[]) {
+  if (pathname === "/admin") {
+    return adminSection === "bases" ? "Bases" : "Usuários";
+  }
+  return visible.find((item) => pathname.startsWith(item.to))?.label || "Cockpit";
 }
 
 function assignmentAcknowledged(username: string, operationId: string) {
