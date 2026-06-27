@@ -2,6 +2,7 @@ import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth, isProfileComplete } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { profileFieldErrors } from "@/lib/profileValidation";
 import { Loader2, Radar, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/onboarding")({
@@ -23,6 +24,7 @@ function OnboardingPage() {
   const [form, setForm] = useState({
     full_name: "",
     contato: "",
+    email: "",
     competencias: "",
   });
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -48,6 +50,7 @@ function OnboardingPage() {
         ...current,
         full_name: profile.full_name || profile.operational_name || "",
         contato: profile.contato || profile.contact || "",
+        email: profile.email || "",
         competencias: (profile.competencias || profile.skills || []).join(", "),
       }));
     }
@@ -63,7 +66,7 @@ function OnboardingPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ full_name: true, base_id: true, contato: true });
+    setTouched({ full_name: true, base_id: true, contato: true, email: true });
     if (!canSubmit) return;
     setBusy(true);
     setError(null);
@@ -78,6 +81,7 @@ function OnboardingPage() {
           base_id: baseId,
           function: "",
           contact: form.contato.trim(),
+          email: form.email.trim(),
           status: "disponivel",
           skills: parseSkills(form.competencias),
         },
@@ -111,11 +115,12 @@ function OnboardingPage() {
           <Field label="Nome completo" error={touched.full_name ? errors.full_name : ""} full>
             <input
               required
+              minLength={6}
               value={form.full_name}
               onBlur={() => setTouched((value) => ({ ...value, full_name: true }))}
               onChange={(e) => setForm({ ...form, full_name: e.target.value })}
               className={inputCls(!!(touched.full_name && errors.full_name))}
-              placeholder="Marcos Castro da Silva"
+              placeholder="Marcos Castro"
             />
           </Field>
 
@@ -162,11 +167,22 @@ function OnboardingPage() {
               onBlur={() => setTouched((value) => ({ ...value, contato: true }))}
               onChange={(e) => setForm({ ...form, contato: e.target.value })}
               className={inputCls(!!(touched.contato && errors.contato))}
-              placeholder="Radio 02 / telefone"
+              placeholder="(81) 99999-9999"
             />
           </Field>
 
-          <Field label="Competencias">
+          <Field label="E-mail" error={touched.email ? errors.email : ""}>
+            <input
+              type="email"
+              value={form.email}
+              onBlur={() => setTouched((value) => ({ ...value, email: true }))}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className={inputCls(!!(touched.email && errors.email))}
+              placeholder="operador@exemplo.com"
+            />
+          </Field>
+
+          <Field label="Competencias" full>
             <input
               value={form.competencias}
               onChange={(e) => setForm({ ...form, competencias: e.target.value })}
@@ -196,13 +212,9 @@ function OnboardingPage() {
   );
 }
 
-function validate(form: { full_name: string; contato: string }, baseId: string) {
-  const errors: Record<string, string> = {};
-  if (form.full_name.trim().split(/\s+/).length < 2) {
-    errors.full_name = "Informe nome e sobrenome.";
-  }
+function validate(form: { full_name: string; contato: string; email?: string }, baseId: string) {
+  const errors = profileFieldErrors(form);
   if (!baseId) errors.base_id = "Selecione uma base operacional.";
-  if (form.contato.trim().length < 3) errors.contato = "Informe radio, telefone ou contato.";
   return errors;
 }
 

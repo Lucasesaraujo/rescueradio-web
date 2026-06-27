@@ -53,15 +53,22 @@ function OperationsPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!ops.length) return;
+    if (!ops.length || creating) {
+      if (!ops.length) setSelected(null);
+      return;
+    }
     const operationId = new URLSearchParams(window.location.search).get("operation_id");
-    if (!operationId) return;
-    const op = ops.find((item) => item.id === operationId);
-    if (op) {
+    const currentStillExists = selected && ops.some((item) => item.id === selected.id);
+    const op = operationId
+      ? ops.find((item) => item.id === operationId)
+      : currentStillExists
+        ? null
+        : ops[0];
+    if (op && selected?.id !== op.id) {
       setSelected(op);
       setCreating(false);
     }
-  }, [ops]);
+  }, [ops, creating, selected]);
 
   useEffect(() => {
     if (!selected || selected.status === "closed") return;

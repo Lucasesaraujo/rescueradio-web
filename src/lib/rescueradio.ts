@@ -22,6 +22,7 @@ export interface RescueProfile {
   funcao?: string;
   contact?: string;
   contato?: string;
+  email?: string;
   status?: "disponivel" | "em_operacao" | "indisponivel";
   connection_status?: "online" | "offline";
   last_seen_at?: string | null;
@@ -60,6 +61,7 @@ export function normalizeProfile(
     funcao: raw.funcao || raw.function || "",
     contact: raw.contact || raw.contato || "",
     contato: raw.contato || raw.contact || "",
+    email: raw.email || "",
     skills,
     competencias: skills,
     complete:
@@ -77,6 +79,7 @@ export function profileToApiPayload(form: {
   nome_operacional: string;
   base_id: string;
   contato: string;
+  email?: string;
   status: string;
   competencias: string | string[];
 }) {
@@ -94,6 +97,7 @@ export function profileToApiPayload(form: {
     base_id: form.base_id.trim(),
     function: "",
     contact: form.contato.trim(),
+    email: form.email?.trim() || "",
     status: form.status,
     skills,
   };

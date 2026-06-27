@@ -5,6 +5,7 @@ import { Shell } from "@/components/Shell";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { profileToApiPayload } from "@/lib/rescueradio";
+import { profileFieldErrors } from "@/lib/profileValidation";
 import { Loader2, Save } from "lucide-react";
 
 export const Route = createFileRoute("/profile")({
@@ -32,9 +33,11 @@ function ProfilePage() {
     nome_operacional: "",
     base_id: "",
     contato: "",
+    email: "",
     status: "disponivel" as "disponivel" | "em_operacao" | "ausente",
     competencias: "",
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
 
@@ -51,6 +54,7 @@ function ProfilePage() {
         nome_operacional: profile.display_name || profile.nome_operacional || "",
         base_id: profile.base_id || user?.base_id || "",
         contato: profile.contato || "",
+        email: profile.email || "",
         status: (profile.status as any) || "disponivel",
         competencias: (profile.competencias || []).join(", "),
       });
@@ -59,6 +63,9 @@ function ProfilePage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nextErrors = profileFieldErrors(form);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
     setBusy(true);
     setOk(false);
     try {
@@ -94,9 +101,10 @@ function ProfilePage() {
           onSubmit={submit}
           className="grid grid-cols-1 gap-3 rounded-md border border-border bg-surface p-4 sm:grid-cols-2"
         >
-          <Field label="Nome completo" full>
+          <Field label="Nome completo" error={errors.full_name} full>
             <input
               required
+              minLength={6}
               value={form.full_name}
               onChange={(e) => {
                 const fullName = e.target.value;
@@ -127,12 +135,22 @@ function ProfilePage() {
               ))}
             </select>
           </Field>
-          <Field label="Contato">
+          <Field label="Contato" error={errors.contato}>
             <input
               required
               value={form.contato}
               onChange={(e) => setForm({ ...form, contato: e.target.value })}
               className={inp}
+              placeholder="(81) 99999-9999"
+            />
+          </Field>
+          <Field label="E-mail" error={errors.email}>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className={inp}
+              placeholder="operador@exemplo.com"
             />
           </Field>
           <Field label="Competencias" full>
@@ -170,10 +188,12 @@ function deriveDisplayName(fullName: string) {
 function Field({
   label,
   children,
+  error,
   full,
 }: {
   label: string;
   children: React.ReactNode;
+  error?: string;
   full?: boolean;
 }) {
   return (
@@ -182,6 +202,7 @@ function Field({
         {label}
       </span>
       {children}
+      {error && <span className="mt-1 block text-[11px] text-destructive">{error}</span>}
     </label>
   );
 }

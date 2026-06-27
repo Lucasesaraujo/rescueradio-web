@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   MessageSquare,
   Map as MapIcon,
@@ -68,7 +68,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [statusBusy, setStatusBusy] = useState(false);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [assignmentMessages, setAssignmentMessages] = useState<any[]>([]);
-  const [adminMenuOpen, setAdminMenuOpen] = useState(true);
+  const [adminMenuOpen, setAdminMenuOpenState] = useState(readAdminMenuOpen);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const routeSearch = useRouterState({ select: (s) => s.location.search as any });
@@ -83,18 +83,20 @@ export function Shell({ children }: { children: ReactNode }) {
   const adminSection = getAdminSection(routeSearch);
 
   const currentStatus = (profile?.status as string) || "disponivel";
-  const statusLabel = useMemo(() => {
-    if (!user) return "Offline";
-    if (currentStatus === "em_operacao") return "Em operacao";
-    if (currentStatus === "ausente" || currentStatus === "indisponivel") return "Ausente";
-    return "Disponivel";
-  }, [currentStatus, user]);
   const statusTone =
     currentStatus === "em_operacao"
       ? "text-destructive"
       : currentStatus === "ausente" || currentStatus === "indisponivel"
         ? "text-[color:var(--color-warning)]"
         : "text-primary";
+
+  const setAdminMenuOpen = (value: boolean | ((current: boolean) => boolean)) => {
+    setAdminMenuOpenState((current) => {
+      const next = typeof value === "function" ? value(current) : value;
+      writeAdminMenuOpen(next);
+      return next;
+    });
+  };
 
   const updateStatus = async (status: string) => {
     if (!profile) return;
@@ -107,6 +109,7 @@ export function Shell({ children }: { children: ReactNode }) {
           base_id: profile.base_id || "",
           function: "",
           contact: profile.contact || profile.contato || "",
+          email: profile.email || "",
           status,
           skills: profile.skills || profile.competencias || [],
         },
@@ -307,15 +310,13 @@ export function Shell({ children }: { children: ReactNode }) {
               title="Status operacional"
             >
               <span className={`status-dot ${statusTone}`} style={{ background: "currentColor" }} />
-              <span className={cn("text-muted-foreground", collapsed && "md:hidden")}>
-                {statusLabel}
-              </span>
               <select
                 value={currentStatus}
                 disabled={statusBusy}
                 onChange={(e) => updateStatus(e.target.value)}
                 className={cn(
-                  "min-w-0 bg-transparent text-foreground outline-none",
+                  "min-w-0 bg-transparent font-semibold outline-none",
+                  statusTone,
                   collapsed && "md:hidden",
                 )}
               >
@@ -437,6 +438,22 @@ function getAdminSection(search: any) {
     return new URLSearchParams(search).get("section") === "bases" ? "bases" : "users";
   }
   return search?.section === "bases" ? "bases" : "users";
+}
+
+function readAdminMenuOpen() {
+  try {
+    return window.localStorage.getItem("rescueradio:sidebar:admin-open") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeAdminMenuOpen(open: boolean) {
+  try {
+    window.localStorage.setItem("rescueradio:sidebar:admin-open", open ? "1" : "0");
+  } catch {
+    // Sidebar state is a convenience only.
+  }
 }
 
 function currentSectionLabel(pathname: string, adminSection: string, visible: NavItem[]) {

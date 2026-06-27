@@ -37,6 +37,7 @@ describe("rescueradio normalizers", () => {
       base_id: "base-central",
       function: "",
       contact: "radio 2",
+      email: "",
       status: "disponivel",
       skills: ["APH", "resgate"],
     });
