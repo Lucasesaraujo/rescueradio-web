@@ -1,3 +1,4 @@
 window.__RESCUERADIO_CONFIG__ = {
-  gatewayWsUrl: '',
+  gatewayWsUrl: "ws://localhost:8000",
+  gatewayHttpUrl: "http://localhost:8001/api",
 };

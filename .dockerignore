@@ -1,6 +1,12 @@
 node_modules
-.angular
 dist
+.output
+.vinxi
+.tanstack
+.nitro
+.wrangler
 .git
-.gitignore
+.env
+*.log
+Dockerfile
 README.md
