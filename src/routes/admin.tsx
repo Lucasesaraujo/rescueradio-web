@@ -1,10 +1,23 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AuthGuard } from "@/components/RoleGuard";
 import { Shell } from "@/components/Shell";
 import { ConfirmDialog, type ConfirmDialogState } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
-import { Loader2, Plus, Shield, RefreshCw, Save, Trash2, Ticket, Copy } from "lucide-react";
+import { searchLocalMunicipalities, type MunicipalitySearchResult } from "@/lib/geo";
+import {
+  Building2,
+  Copy,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Save,
+  Shield,
+  Ticket,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: () => (
@@ -16,71 +29,86 @@ export const Route = createFileRoute("/admin")({
   ),
 });
 
+const UFS = [
+  "AC",
+  "AL",
+  "AP",
+  "AM",
+  "BA",
+  "CE",
+  "DF",
+  "ES",
+  "GO",
+  "MA",
+  "MT",
+  "MS",
+  "MG",
+  "PA",
+  "PB",
+  "PR",
+  "PE",
+  "PI",
+  "RJ",
+  "RN",
+  "RS",
+  "RO",
+  "RR",
+  "SC",
+  "SP",
+  "SE",
+  "TO",
+];
+
+type AdminSection = "users" | "bases";
+
 function AdminPage() {
+  const routeSearch = useRouterState({ select: (state) => state.location.search as any });
+  const section = getSection(routeSearch);
   const [users, setUsers] = useState<any[]>([]);
   const [bases, setBases] = useState<any[]>([]);
-  const [functions, setFunctions] = useState<any[]>([]);
   const [invites, setInvites] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [newBase, setNewBase] = useState({
-    id: "",
-    name: "",
-    city: "",
-    latitude: "",
-    longitude: "",
-    coverage_cities: "",
-  });
-  const [newFunction, setNewFunction] = useState({ id: "", label: "" });
-  const [newInvite, setNewInvite] = useState({
-    base_id: "",
-    role: "operador",
-    expires_in_hours: 72,
-  });
   const [createdInviteCode, setCreatedInviteCode] = useState("");
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [baseModalOpen, setBaseModalOpen] = useState(false);
+  const [savingInvite, setSavingInvite] = useState(false);
   const [savingBase, setSavingBase] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmDialogState | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [newBase, setNewBase] = useState(emptyBaseForm());
+  const [newInvite, setNewInvite] = useState({
+    role: "operador",
+    base_id: "",
+    uf_scope: "PE",
+    expires_in_hours: 72,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [u, b, f, i] = await Promise.all([
+      const [loadedUsers, loadedBases, loadedInvites] = await Promise.all([
         api<any[]>("/users").catch(() => []),
         api<any[]>("/bases").catch(() => []),
-        api<any[]>("/functions").catch(() => []),
         api<any[]>("/invites").catch(() => []),
       ]);
-      setUsers(Array.isArray(u) ? u : []);
-      setBases(Array.isArray(b) ? b : []);
-      setFunctions(Array.isArray(f) ? f : []);
-      setInvites(Array.isArray(i) ? i : []);
-      if (Array.isArray(b) && b[0]?.id) {
-        setNewInvite((prev) => (prev.base_id ? prev : { ...prev, base_id: b[0].id }));
+      setUsers(Array.isArray(loadedUsers) ? loadedUsers : []);
+      setBases(Array.isArray(loadedBases) ? loadedBases : []);
+      setInvites(Array.isArray(loadedInvites) ? loadedInvites : []);
+      if (Array.isArray(loadedBases) && loadedBases[0]?.id) {
+        setNewInvite((prev) => ({
+          ...prev,
+          base_id: prev.base_id || loadedBases[0].id,
+          uf_scope: prev.uf_scope || loadedBases[0].uf || "PE",
+        }));
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const updateBase = async (base: any) => {
-    try {
-      await api(`/bases/${encodeURIComponent(base.id)}`, {
-        method: "PATCH",
-        json: {
-          name: base.name,
-          city: base.city,
-          latitude: parseOptionalNumber(base.latitude),
-          longitude: parseOptionalNumber(base.longitude),
-          coverage_cities: parseCities(base.coverage_cities_text || base.coverage_cities || []),
-        },
-      });
-      load();
-    } catch (e: any) {
-      alert(e?.message || "Falha ao editar base");
-    }
-  };
-
-  const requestConfirm = (state: ConfirmDialogState) => setConfirmState(state);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const runConfirmedAction = async () => {
     if (!confirmState) return;
@@ -93,43 +121,49 @@ function AdminPage() {
     }
   };
 
-  const deleteBase = async (base: any) => {
-    requestConfirm({
-      title: "Excluir base",
-      description: `A base ${base.name || base.id} sera removida do cadastro. Essa acao nao pode ser desfeita.`,
-      confirmLabel: "Excluir base",
-      variant: "danger",
+  const updateUser = async (user: any) => {
+    const payload =
+      user.role === "admin"
+        ? { role: "admin", base_id: null, uf_scope: null }
+        : user.role === "comandante"
+          ? { role: "comandante", base_id: null, uf_scope: user.uf_scope || "PE" }
+          : {
+              role: "operador",
+              base_id: user.base_id || user.profile?.base_id || bases[0]?.id,
+              uf_scope: null,
+            };
+
+    setConfirmState({
+      title: "Atualizar acesso",
+      description: `Salvar o escopo de acesso de ${user.username}?`,
+      confirmLabel: "Salvar acesso",
+      variant: "warning",
       onConfirm: async () => {
-        try {
-          await api(`/bases/${encodeURIComponent(base.id)}`, { method: "DELETE" });
-          load();
-        } catch (e: any) {
-          alert(e?.message || "Falha ao excluir base");
-        }
+        await api(`/users/${encodeURIComponent(user.username)}/role`, {
+          method: "PATCH",
+          json: payload,
+        });
+        load();
       },
     });
   };
 
-  const createFunction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api("/functions", { method: "POST", json: newFunction });
-      setNewFunction({ id: "", label: "" });
-      load();
-    } catch (e: any) {
-      alert(e?.message || "Falha ao criar funcao");
-    }
-  };
-
-  const createInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const createInvite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSavingInvite(true);
     setCreatedInviteCode("");
+    const payload =
+      newInvite.role === "admin"
+        ? { role: "admin", base_id: null, uf_scope: null }
+        : newInvite.role === "comandante"
+          ? { role: "comandante", base_id: null, uf_scope: newInvite.uf_scope }
+          : { role: "operador", base_id: newInvite.base_id, uf_scope: null };
+
     try {
       const res = await api<any>("/invites", {
         method: "POST",
         json: {
-          base_id: newInvite.base_id,
-          role: newInvite.role,
+          ...payload,
           expires_in_hours: Number(newInvite.expires_in_hours) || 72,
         },
       });
@@ -137,80 +171,26 @@ function AdminPage() {
       load();
     } catch (e: any) {
       alert(e?.message || "Falha ao criar convite");
+    } finally {
+      setSavingInvite(false);
     }
   };
 
   const revokeInvite = async (invite: any) => {
-    requestConfirm({
+    setConfirmState({
       title: "Revogar convite",
-      description: `O convite para ${invite.role} na base ${invite.base_id} sera invalidado.`,
+      description: `O convite para ${invite.role} sera invalidado.`,
       confirmLabel: "Revogar",
       variant: "warning",
       onConfirm: async () => {
-        try {
-          await api(`/invites/${encodeURIComponent(invite.id)}`, { method: "DELETE" });
-          load();
-        } catch (e: any) {
-          alert(e?.message || "Falha ao revogar convite");
-        }
+        await api(`/invites/${encodeURIComponent(invite.id)}`, { method: "DELETE" });
+        load();
       },
     });
   };
 
-  const updateFunction = async (fn: any) => {
-    try {
-      await api(`/functions/${encodeURIComponent(fn.id)}`, {
-        method: "PATCH",
-        json: { label: fn.label },
-      });
-      load();
-    } catch (e: any) {
-      alert(e?.message || "Falha ao editar funcao");
-    }
-  };
-
-  const deleteFunction = async (fn: any) => {
-    requestConfirm({
-      title: "Excluir funcao",
-      description: `A funcao ${fn.label || fn.id} deixara de aparecer nos cadastros de operador.`,
-      confirmLabel: "Excluir funcao",
-      variant: "danger",
-      onConfirm: async () => {
-        try {
-          await api(`/functions/${encodeURIComponent(fn.id)}`, { method: "DELETE" });
-          load();
-        } catch (e: any) {
-          alert(e?.message || "Falha ao excluir funcao");
-        }
-      },
-    });
-  };
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const updateRole = async (username: string, role: string) => {
-    requestConfirm({
-      title: "Alterar perfil de acesso",
-      description: `O usuario ${username} passara a ter perfil ${role}.`,
-      confirmLabel: "Alterar perfil",
-      variant: "warning",
-      onConfirm: async () => {
-        try {
-          await api(`/users/${encodeURIComponent(username)}/role`, {
-            method: "PATCH",
-            json: { role },
-          });
-          load();
-        } catch (e: any) {
-          alert(e?.message || "Falha ao alterar role");
-        }
-      },
-    });
-  };
-
-  const createBase = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const createBase = async (event: React.FormEvent) => {
+    event.preventDefault();
     setSavingBase(true);
     try {
       await api("/bases", {
@@ -219,18 +199,65 @@ function AdminPage() {
           id: newBase.id,
           name: newBase.name,
           city: newBase.city,
+          uf: newBase.uf,
           latitude: parseOptionalNumber(newBase.latitude),
           longitude: parseOptionalNumber(newBase.longitude),
-          coverage_cities: parseCities(newBase.coverage_cities),
+          coverage_cities: parseCities(newBase.coverage_cities).length
+            ? parseCities(newBase.coverage_cities)
+            : [newBase.city],
         },
       });
-      setNewBase({ id: "", name: "", city: "", latitude: "", longitude: "", coverage_cities: "" });
+      setNewBase(emptyBaseForm());
+      setBaseModalOpen(false);
       load();
     } catch (e: any) {
       alert(e?.message || "Falha ao criar base");
     } finally {
       setSavingBase(false);
     }
+  };
+
+  const updateBase = async (base: any) => {
+    await api(`/bases/${encodeURIComponent(base.id)}`, {
+      method: "PATCH",
+      json: {
+        name: base.name,
+        city: base.city,
+        uf: base.uf || "PE",
+        latitude: parseOptionalNumber(base.latitude),
+        longitude: parseOptionalNumber(base.longitude),
+        coverage_cities: parseCities(base.coverage_cities_text || base.coverage_cities || []).length
+          ? parseCities(base.coverage_cities_text || base.coverage_cities || [])
+          : [base.city],
+      },
+    });
+    load();
+  };
+
+  const deleteBase = async (base: any) => {
+    setConfirmState({
+      title: "Excluir base",
+      description: `A base ${base.name || base.id} sera removida do cadastro.`,
+      confirmLabel: "Excluir base",
+      variant: "danger",
+      onConfirm: async () => {
+        await api(`/bases/${encodeURIComponent(base.id)}`, { method: "DELETE" });
+        load();
+      },
+    });
+  };
+
+  const applyMunicipality = (municipality: MunicipalitySearchResult) => {
+    setNewBase((prev) => ({
+      ...prev,
+      city: municipality.name,
+      uf: municipality.uf,
+      latitude: String(Number(municipality.latitude.toFixed(6))),
+      longitude: String(Number(municipality.longitude.toFixed(6))),
+      coverage_cities: municipality.name,
+      id: prev.id || `base-${normalizeSlug(municipality.name)}`,
+      name: prev.name || `Base ${municipality.name}`,
+    }));
   };
 
   return (
@@ -242,401 +269,798 @@ function AdminPage() {
         onCancel={() => !confirmBusy && setConfirmState(null)}
         onConfirm={runConfirmedAction}
       />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="rounded-md border border-border bg-surface">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" />
-              <div className="text-sm font-semibold">Usuarios</div>
-            </div>
+      <InviteModal
+        open={inviteModalOpen}
+        bases={bases}
+        invite={newInvite}
+        createdCode={createdInviteCode}
+        busy={savingInvite}
+        onChange={setNewInvite}
+        onClose={() => {
+          setInviteModalOpen(false);
+          setCreatedInviteCode("");
+        }}
+        onSubmit={createInvite}
+      />
+      <BaseModal
+        open={baseModalOpen}
+        form={newBase}
+        busy={savingBase}
+        onChange={setNewBase}
+        onApplyMunicipality={applyMunicipality}
+        onClose={() => setBaseModalOpen(false)}
+        onSubmit={createBase}
+      />
+
+      {section === "bases" ? (
+        <BasesSection
+          bases={bases}
+          loading={loading}
+          onRefresh={load}
+          onCreate={() => setBaseModalOpen(true)}
+          onUpdate={updateBase}
+          onDelete={deleteBase}
+          onDraft={setBases}
+        />
+      ) : (
+        <UsersSection
+          users={users}
+          bases={bases}
+          invites={invites}
+          loading={loading}
+          onRefresh={load}
+          onCreateInvite={() => setInviteModalOpen(true)}
+          onUpdateUser={updateUser}
+          onUsersDraft={setUsers}
+          onRevokeInvite={revokeInvite}
+        />
+      )}
+    </div>
+  );
+}
+
+function UsersSection({
+  users,
+  bases,
+  invites,
+  loading,
+  onRefresh,
+  onCreateInvite,
+  onUpdateUser,
+  onUsersDraft,
+  onRevokeInvite,
+}: {
+  users: any[];
+  bases: any[];
+  invites: any[];
+  loading: boolean;
+  onRefresh: () => void;
+  onCreateInvite: () => void;
+  onUpdateUser: (user: any) => void;
+  onUsersDraft: React.Dispatch<React.SetStateAction<any[]>>;
+  onRevokeInvite: (invite: any) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="rounded-md border border-border bg-surface">
+        <SectionHeader
+          icon={<Users className="h-4 w-4" />}
+          title="Usuarios"
+          subtitle="Admin global, comandante por UF, operador por base"
+          action={
             <button
-              onClick={load}
-              className="grid h-7 w-7 place-items-center rounded-md border border-border text-muted-foreground hover:text-foreground"
+              onClick={onCreateInvite}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <Plus className="h-3.5 w-3.5" /> Criar convite
             </button>
-          </div>
-          {loading ? (
-            <div className="grid place-items-center p-6 text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...
-            </div>
-          ) : users.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">Nenhum usuario.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <tr className="border-b border-border">
-                    <th className="px-3 py-2 text-left">Usuario</th>
-                    <th className="px-3 py-2 text-left">Nome</th>
-                    <th className="px-3 py-2 text-left">Base</th>
-                    <th className="px-3 py-2 text-left">Role</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.username} className="border-b border-border/60 hover:bg-surface-2">
-                      <td className="px-3 py-2 font-mono text-xs">{u.username}</td>
-                      <td className="px-3 py-2">{u.display_name || "-"}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {u.profile?.base_id || u.base_id || "-"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="rounded border border-border bg-background px-2 py-0.5 text-xs uppercase">
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">
+          }
+          loading={loading}
+          onRefresh={onRefresh}
+        />
+        {loading ? (
+          <LoadingState />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th className="px-3 py-2 text-left">Usuario</th>
+                  <th className="px-3 py-2 text-left">Nome</th>
+                  <th className="px-3 py-2 text-left">Papel</th>
+                  <th className="px-3 py-2 text-left">Escopo</th>
+                  <th className="px-3 py-2 text-right">Acao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.username} className="border-b border-border/60 hover:bg-surface-2">
+                    <td className="px-3 py-2 font-mono text-xs">{user.username}</td>
+                    <td className="px-3 py-2">
+                      {user.display_name || user.profile?.display_name || "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={user.role}
+                        onChange={(event) =>
+                          onUsersDraft((prev) =>
+                            prev.map((item) =>
+                              item.username === user.username
+                                ? { ...item, role: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                      >
+                        <option value="operador">operador</option>
+                        <option value="comandante">comandante</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      {user.role === "admin" ? (
+                        <span className="text-xs text-muted-foreground">Global</span>
+                      ) : user.role === "comandante" ? (
+                        <UfSelect
+                          value={user.uf_scope || "PE"}
+                          onChange={(uf) =>
+                            onUsersDraft((prev) =>
+                              prev.map((item) =>
+                                item.username === user.username ? { ...item, uf_scope: uf } : item,
+                              ),
+                            )
+                          }
+                        />
+                      ) : (
                         <select
-                          value={u.role}
-                          onChange={(e) => updateRole(u.username, e.target.value)}
+                          value={user.base_id || user.profile?.base_id || ""}
+                          onChange={(event) =>
+                            onUsersDraft((prev) =>
+                              prev.map((item) =>
+                                item.username === user.username
+                                  ? { ...item, base_id: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
                           className="rounded-md border border-border bg-background px-2 py-1 text-xs"
                         >
-                          <option value="operador">operador</option>
-                          <option value="comandante">comandante</option>
-                          <option value="admin">admin</option>
+                          <option value="">Selecione...</option>
+                          {bases.map((base) => (
+                            <option key={base.id} value={base.id}>
+                              {base.name || base.id}
+                            </option>
+                          ))}
                         </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => onUpdateUser(user)}
+                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-semibold text-primary"
+                      >
+                        <Save className="h-3.5 w-3.5" /> Salvar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-xs text-muted-foreground">
+                      Nenhum usuario.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
-        <aside className="space-y-4">
-          <section className="rounded-md border border-border bg-surface p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Ticket className="h-4 w-4 text-primary" />
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Convites
+      <section className="rounded-md border border-border bg-surface p-4">
+        <PanelTitle
+          icon={<Ticket className="h-4 w-4" />}
+          title="Convites ativos"
+          subtitle="Codigos ainda validos para cadastro"
+        />
+        <ul className="max-h-[70vh] space-y-2 overflow-y-auto text-xs">
+          {invites.map((invite) => {
+            const used = Boolean(invite.used_by);
+            const revoked = Boolean(invite.revoked_at);
+            return (
+              <li key={invite.id} className="rounded border border-border bg-background p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-mono uppercase tracking-wide text-muted-foreground">
+                      {invite.role} - {invite.uf_scope || invite.base_id || "global"}
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {used
+                        ? `Usado por ${invite.used_by}`
+                        : revoked
+                          ? "Revogado"
+                          : `Expira em ${formatDate(invite.expires_at)}`}
+                    </div>
+                  </div>
+                  {!used && !revoked && (
+                    <button
+                      type="button"
+                      onClick={() => onRevokeInvite(invite)}
+                      className="grid h-7 w-7 place-items-center rounded border border-destructive/40 text-destructive"
+                      title="Revogar convite"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
-                  Cadastro fechado por codigo unico
-                </div>
+              </li>
+            );
+          })}
+          {invites.length === 0 && <li className="text-muted-foreground">Nenhum convite ativo.</li>}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+function BasesSection({
+  bases,
+  loading,
+  onRefresh,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onDraft,
+}: {
+  bases: any[];
+  loading: boolean;
+  onRefresh: () => void;
+  onCreate: () => void;
+  onUpdate: (base: any) => void;
+  onDelete: (base: any) => void;
+  onDraft: React.Dispatch<React.SetStateAction<any[]>>;
+}) {
+  return (
+    <section className="rounded-md border border-border bg-surface">
+      <SectionHeader
+        icon={<Building2 className="h-4 w-4" />}
+        title="Bases"
+        subtitle="Bases operacionais, UF, coordenadas e cidades cobertas"
+        action={
+          <button
+            onClick={onCreate}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" /> Criar base
+          </button>
+        }
+        loading={loading}
+        onRefresh={onRefresh}
+      />
+      {loading ? (
+        <LoadingState />
+      ) : (
+        <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+          {bases.map((base) => (
+            <article key={base.id} className="rounded-md border border-border bg-background p-3">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                {base.id}
               </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                <input
+                  value={base.name || ""}
+                  onChange={(event) =>
+                    updateBaseDraft(onDraft, base.id, { name: event.target.value })
+                  }
+                  className={inputClass}
+                  placeholder="Nome"
+                />
+                <UfSelect
+                  value={base.uf || "PE"}
+                  onChange={(uf) => updateBaseDraft(onDraft, base.id, { uf })}
+                />
+                <input
+                  value={base.city || ""}
+                  onChange={(event) =>
+                    updateBaseDraft(onDraft, base.id, { city: event.target.value })
+                  }
+                  className="col-span-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                  placeholder="Cidade"
+                />
+                <input
+                  value={base.latitude ?? ""}
+                  onChange={(event) =>
+                    updateBaseDraft(onDraft, base.id, { latitude: event.target.value })
+                  }
+                  placeholder="Latitude"
+                  className={inputClass}
+                />
+                <input
+                  value={base.longitude ?? ""}
+                  onChange={(event) =>
+                    updateBaseDraft(onDraft, base.id, { longitude: event.target.value })
+                  }
+                  placeholder="Longitude"
+                  className={inputClass}
+                />
+                <textarea
+                  value={
+                    base.coverage_cities_text ??
+                    (Array.isArray(base.coverage_cities) ? base.coverage_cities.join(", ") : "")
+                  }
+                  onChange={(event) =>
+                    updateBaseDraft(onDraft, base.id, { coverage_cities_text: event.target.value })
+                  }
+                  placeholder="Cidades cobertas, separadas por virgula"
+                  rows={3}
+                  className="col-span-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                />
+                <button
+                  onClick={() => onUpdate(base)}
+                  className="inline-flex items-center justify-center gap-1 rounded-md border border-primary/40 px-2 py-1.5 text-xs font-semibold text-primary"
+                >
+                  <Save className="h-3.5 w-3.5" /> Salvar
+                </button>
+                <button
+                  onClick={() => onDelete(base)}
+                  className="inline-flex items-center justify-center gap-1 rounded-md border border-destructive/40 px-2 py-1.5 text-xs font-semibold text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </button>
+              </div>
+            </article>
+          ))}
+          {bases.length === 0 && (
+            <div className="p-6 text-center text-xs text-muted-foreground">Nenhuma base.</div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InviteModal({
+  open,
+  bases,
+  invite,
+  createdCode,
+  busy,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  bases: any[];
+  invite: any;
+  createdCode: string;
+  busy: boolean;
+  onChange: (invite: any) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent) => void;
+}) {
+  if (!open) return null;
+  return (
+    <ModalFrame
+      title="Criar convite"
+      subtitle="Cadastro fechado por codigo unico"
+      onClose={onClose}
+    >
+      {createdCode && (
+        <div className="rounded-md border border-primary/40 bg-primary/10 p-2">
+          <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-primary">
+            Codigo gerado
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded bg-background px-2 py-1 text-xs">
+              {createdCode}
+            </code>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(createdCode)}
+              className="grid h-8 w-8 place-items-center rounded border border-border text-muted-foreground hover:text-primary"
+              title="Copiar convite"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+      <form onSubmit={onSubmit} className="space-y-3">
+        <Field label="Papel">
+          <select
+            value={invite.role}
+            onChange={(event) => onChange({ ...invite, role: event.target.value })}
+            className={inputClass}
+          >
+            <option value="operador">operador</option>
+            <option value="comandante">comandante</option>
+            <option value="admin">admin</option>
+          </select>
+        </Field>
+        {invite.role === "operador" && (
+          <Field label="Base do operador">
+            <select
+              required
+              value={invite.base_id}
+              onChange={(event) => onChange({ ...invite, base_id: event.target.value })}
+              className={inputClass}
+            >
+              <option value="">Selecione...</option>
+              {bases.map((base) => (
+                <option key={base.id} value={base.id}>
+                  {base.name || base.id}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {invite.role === "comandante" && (
+          <Field label="UF do comandante">
+            <UfSelect
+              value={invite.uf_scope}
+              onChange={(uf) => onChange({ ...invite, uf_scope: uf })}
+              className="w-full"
+            />
+          </Field>
+        )}
+        <Field label="Validade em horas">
+          <input
+            type="number"
+            min={1}
+            max={720}
+            value={invite.expires_in_hours}
+            onChange={(event) =>
+              onChange({ ...invite, expires_in_hours: Number(event.target.value) })
+            }
+            className={inputClass}
+          />
+        </Field>
+        <button
+          type="submit"
+          disabled={busy}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Gerar convite
+        </button>
+      </form>
+    </ModalFrame>
+  );
+}
+
+function BaseModal({
+  open,
+  form,
+  busy,
+  onChange,
+  onApplyMunicipality,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  form: ReturnType<typeof emptyBaseForm>;
+  busy: boolean;
+  onChange: React.Dispatch<React.SetStateAction<ReturnType<typeof emptyBaseForm>>>;
+  onApplyMunicipality: (municipality: MunicipalitySearchResult) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent) => void;
+}) {
+  const [cityQuery, setCityQuery] = useState("");
+  const [cityResults, setCityResults] = useState<MunicipalitySearchResult[]>([]);
+  const [searchingCities, setSearchingCities] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const query = cityQuery.trim();
+    if (query.length < 2) {
+      setCityResults([]);
+      return;
+    }
+    setSearchingCities(true);
+    searchLocalMunicipalities(query)
+      .then((results) => {
+        if (!cancelled) setCityResults(results);
+      })
+      .catch(() => {
+        if (!cancelled) setCityResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSearchingCities(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cityQuery, open]);
+
+  if (!open) return null;
+  return (
+    <ModalFrame
+      title="Criar base"
+      subtitle="Busque um municipio das malhas locais ou informe coordenadas manualmente"
+      onClose={onClose}
+    >
+      <form onSubmit={onSubmit} className="space-y-3">
+        <Field label="Buscar municipio">
+          <input
+            value={cityQuery}
+            onChange={(event) => setCityQuery(event.target.value)}
+            className={inputClass}
+            placeholder="Digite Salvador, Fortaleza, Recife..."
+          />
+        </Field>
+        <div className="min-h-10 rounded-md border border-border bg-background p-2">
+          {searchingCities ? (
+            <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando municipios...
             </div>
-            {createdInviteCode && (
-              <div className="mb-3 rounded-md border border-primary/40 bg-primary/10 p-2">
-                <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-primary">
-                  Codigo gerado
-                </div>
-                <div className="flex items-center gap-2">
-                  <code className="min-w-0 flex-1 break-all rounded bg-background px-2 py-1 text-xs">
-                    {createdInviteCode}
-                  </code>
+          ) : cityQuery.trim().length < 2 ? (
+            <div className="px-2 py-1 text-xs text-muted-foreground">
+              A busca usa as fronteiras locais de Pernambuco, Bahia e Ceara.
+            </div>
+          ) : cityResults.length === 0 ? (
+            <div className="px-2 py-1 text-xs text-muted-foreground">
+              Nenhum municipio encontrado nas malhas locais.
+            </div>
+          ) : (
+            <ul className="max-h-44 space-y-1 overflow-y-auto">
+              {cityResults.map((city) => (
+                <li key={`${city.uf}-${city.id}`}>
                   <button
                     type="button"
-                    onClick={() => navigator.clipboard?.writeText(createdInviteCode)}
-                    className="grid h-8 w-8 place-items-center rounded border border-border text-muted-foreground hover:text-primary"
-                    title="Copiar convite"
+                    onClick={() => {
+                      onApplyMunicipality(city);
+                      setCityQuery(`${city.name} - ${city.uf}`);
+                      setCityResults([]);
+                    }}
+                    className="flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-xs hover:bg-surface-2"
                   >
-                    <Copy className="h-3.5 w-3.5" />
+                    <span className="font-medium">{city.name}</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      {city.uf}
+                    </span>
                   </button>
-                </div>
-              </div>
-            )}
-            <form onSubmit={createInvite} className="mb-3 space-y-2">
-              <select
-                required
-                value={newInvite.base_id}
-                onChange={(e) => setNewInvite({ ...newInvite, base_id: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              >
-                <option value="">Selecione a base</option>
-                {bases.map((base) => (
-                  <option key={base.id} value={base.id}>
-                    {base.name || base.nome || base.id}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={newInvite.role}
-                onChange={(e) => setNewInvite({ ...newInvite, role: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              >
-                <option value="operador">operador</option>
-                <option value="comandante">comandante</option>
-                <option value="admin">admin</option>
-              </select>
-              <input
-                type="number"
-                min={1}
-                max={720}
-                value={newInvite.expires_in_hours}
-                onChange={(e) =>
-                  setNewInvite({ ...newInvite, expires_in_hours: Number(e.target.value) })
-                }
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-                aria-label="Validade em horas"
-              />
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" /> Gerar convite
-              </button>
-            </form>
-            <ul className="max-h-56 space-y-2 overflow-y-auto text-xs">
-              {invites.length === 0 && (
-                <li className="text-muted-foreground">Nenhum convite ativo.</li>
-              )}
-              {invites.map((invite) => {
-                const used = Boolean(invite.used_by);
-                const revoked = Boolean(invite.revoked_at);
-                return (
-                  <li key={invite.id} className="rounded border border-border bg-background p-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-mono uppercase tracking-wide text-muted-foreground">
-                          {invite.role} - {invite.base_id || "sem base"}
-                        </div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
-                          {used
-                            ? `Usado por ${invite.used_by}`
-                            : revoked
-                              ? "Revogado"
-                              : `Expira em ${formatDate(invite.expires_at)}`}
-                        </div>
-                      </div>
-                      {!used && !revoked && (
-                        <button
-                          type="button"
-                          onClick={() => revokeInvite(invite)}
-                          className="grid h-7 w-7 place-items-center rounded border border-destructive/40 text-destructive"
-                          title="Revogar convite"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-
-          <section className="rounded-md border border-border bg-surface p-4">
-            <div className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Bases ({bases.length})
-            </div>
-            <ul className="mb-3 space-y-2 text-sm">
-              {bases.map((b) => (
-                <li key={b.id} className="rounded border border-border bg-background p-2">
-                  <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {b.id}
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1">
-                    <input
-                      value={b.name || ""}
-                      onChange={(e) =>
-                        setBases((prev) =>
-                          prev.map((item) =>
-                            item.id === b.id ? { ...item, name: e.target.value } : item,
-                          ),
-                        )
-                      }
-                      className="rounded border border-border bg-surface px-2 py-1 text-xs"
-                    />
-                    <button
-                      onClick={() => updateBase(b)}
-                      className="grid h-7 w-7 place-items-center rounded border border-border text-primary"
-                      title="Salvar base"
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                    </button>
-                    <input
-                      value={b.city || ""}
-                      onChange={(e) =>
-                        setBases((prev) =>
-                          prev.map((item) =>
-                            item.id === b.id ? { ...item, city: e.target.value } : item,
-                          ),
-                        )
-                      }
-                      className="rounded border border-border bg-surface px-2 py-1 text-xs"
-                    />
-                    <div className="col-span-2 grid grid-cols-2 gap-1">
-                      <input
-                        value={b.latitude ?? ""}
-                        onChange={(e) =>
-                          setBases((prev) =>
-                            prev.map((item) =>
-                              item.id === b.id ? { ...item, latitude: e.target.value } : item,
-                            ),
-                          )
-                        }
-                        placeholder="Latitude"
-                        className="rounded border border-border bg-surface px-2 py-1 text-xs"
-                      />
-                      <input
-                        value={b.longitude ?? ""}
-                        onChange={(e) =>
-                          setBases((prev) =>
-                            prev.map((item) =>
-                              item.id === b.id ? { ...item, longitude: e.target.value } : item,
-                            ),
-                          )
-                        }
-                        placeholder="Longitude"
-                        className="rounded border border-border bg-surface px-2 py-1 text-xs"
-                      />
-                    </div>
-                    <button
-                      onClick={() => deleteBase(b)}
-                      className="grid h-7 w-7 place-items-center rounded border border-destructive/40 text-destructive"
-                      title="Excluir base"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                    <textarea
-                      value={
-                        b.coverage_cities_text ??
-                        (Array.isArray(b.coverage_cities) ? b.coverage_cities.join(", ") : "")
-                      }
-                      onChange={(e) =>
-                        setBases((prev) =>
-                          prev.map((item) =>
-                            item.id === b.id
-                              ? { ...item, coverage_cities_text: e.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                      placeholder="Cidades cobertas, separadas por virgula"
-                      rows={2}
-                      className="col-span-2 rounded border border-border bg-surface px-2 py-1 text-xs"
-                    />
-                  </div>
-                </li>
-              ))}
-              {bases.length === 0 && (
-                <li className="text-xs text-muted-foreground">Nenhuma base.</li>
-              )}
-            </ul>
-            <form onSubmit={createBase} className="space-y-2">
-              <input
-                required
-                placeholder="ID da base"
-                value={newBase.id}
-                onChange={(e) => setNewBase({ ...newBase, id: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              />
-              <input
-                required
-                placeholder="Nome"
-                value={newBase.name}
-                onChange={(e) => setNewBase({ ...newBase, name: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              />
-              <input
-                required
-                placeholder="Cidade"
-                value={newBase.city}
-                onChange={(e) => setNewBase({ ...newBase, city: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  placeholder="Latitude"
-                  value={newBase.latitude}
-                  onChange={(e) => setNewBase({ ...newBase, latitude: e.target.value })}
-                  className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-                />
-                <input
-                  placeholder="Longitude"
-                  value={newBase.longitude}
-                  onChange={(e) => setNewBase({ ...newBase, longitude: e.target.value })}
-                  className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-                />
-              </div>
-              <textarea
-                placeholder="Cidades cobertas: Recife, Olinda, Paulista..."
-                value={newBase.coverage_cities}
-                onChange={(e) => setNewBase({ ...newBase, coverage_cities: e.target.value })}
-                rows={3}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              />
-              <button
-                type="submit"
-                disabled={savingBase}
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-              >
-                <Plus className="h-3.5 w-3.5" /> Criar base
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-md border border-border bg-surface p-4">
-            <div className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Funcoes ({functions.length})
-            </div>
-            <ul className="mb-3 space-y-2 text-sm">
-              {functions.map((fn) => (
-                <li key={fn.id} className="rounded border border-border bg-background p-2">
-                  <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {fn.id}
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-1">
-                    <input
-                      value={fn.label || ""}
-                      onChange={(e) =>
-                        setFunctions((prev) =>
-                          prev.map((item) =>
-                            item.id === fn.id ? { ...item, label: e.target.value } : item,
-                          ),
-                        )
-                      }
-                      className="rounded border border-border bg-surface px-2 py-1 text-xs"
-                    />
-                    <button
-                      onClick={() => updateFunction(fn)}
-                      className="grid h-7 w-7 place-items-center rounded border border-border text-primary"
-                      title="Salvar funcao"
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => deleteFunction(fn)}
-                      className="grid h-7 w-7 place-items-center rounded border border-destructive/40 text-destructive"
-                      title="Excluir funcao"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
                 </li>
               ))}
             </ul>
-            <form onSubmit={createFunction} className="space-y-2">
-              <input
-                required
-                placeholder="ID da funcao"
-                value={newFunction.id}
-                onChange={(e) => setNewFunction({ ...newFunction, id: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              />
-              <input
-                required
-                placeholder="Nome da funcao"
-                value={newFunction.label}
-                onChange={(e) => setNewFunction({ ...newFunction, label: e.target.value })}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
-              />
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" /> Criar funcao
-              </button>
-            </form>
-          </section>
-        </aside>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="ID da base">
+            <input
+              required
+              value={form.id}
+              onChange={(event) => onChange((prev) => ({ ...prev, id: event.target.value }))}
+              className={inputClass}
+              placeholder="base-fortaleza"
+            />
+          </Field>
+          <Field label="Nome">
+            <input
+              required
+              value={form.name}
+              onChange={(event) => onChange((prev) => ({ ...prev, name: event.target.value }))}
+              className={inputClass}
+              placeholder="Base Fortaleza"
+            />
+          </Field>
+          <Field label="Cidade">
+            <input
+              required
+              value={form.city}
+              onChange={(event) => onChange((prev) => ({ ...prev, city: event.target.value }))}
+              className={inputClass}
+              placeholder="Fortaleza"
+            />
+          </Field>
+          <Field label="UF">
+            <UfSelect value={form.uf} onChange={(uf) => onChange((prev) => ({ ...prev, uf }))} />
+          </Field>
+          <Field label="Latitude">
+            <input
+              value={form.latitude}
+              onChange={(event) => onChange((prev) => ({ ...prev, latitude: event.target.value }))}
+              className={inputClass}
+              placeholder="-3.7319"
+            />
+          </Field>
+          <Field label="Longitude">
+            <input
+              value={form.longitude}
+              onChange={(event) => onChange((prev) => ({ ...prev, longitude: event.target.value }))}
+              className={inputClass}
+              placeholder="-38.5267"
+            />
+          </Field>
+        </div>
+        <Field label="Cidades cobertas">
+          <textarea
+            value={form.coverage_cities}
+            onChange={(event) =>
+              onChange((prev) => ({ ...prev, coverage_cities: event.target.value }))
+            }
+            rows={3}
+            className={inputClass}
+            placeholder="Fortaleza, Caucaia, Maracanau..."
+          />
+        </Field>
+        {form.city && form.latitude && form.longitude && (
+          <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
+            Municipio selecionado com coordenada central pronta para centralizacao no mapa.
+          </div>
+        )}
+        <button
+          type="submit"
+          disabled={busy}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Criar base
+        </button>
+      </form>
+    </ModalFrame>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  action,
+  loading,
+  onRefresh,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <div className="flex items-center gap-2">
+        <div className="text-primary">{icon}</div>
+        <div>
+          <div className="text-sm font-semibold">{title}</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            {subtitle}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {action}
+        <button
+          onClick={onRefresh}
+          className="grid h-8 w-8 place-items-center rounded-md border border-border text-muted-foreground hover:text-foreground"
+          title="Atualizar"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        </button>
       </div>
     </div>
   );
+}
+
+function ModalFrame({
+  title,
+  subtitle,
+  children,
+  onClose,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
+      <section className="w-full max-w-xl rounded-md border border-border bg-surface shadow-2xl">
+        <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+          <div>
+            <div className="text-sm font-semibold">{title}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {subtitle}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded border border-border text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="space-y-3 p-4">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+const inputClass = "w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs";
+
+function UfSelect({
+  value,
+  onChange,
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <select
+      value={value || "PE"}
+      onChange={(event) => onChange(event.target.value)}
+      className={`rounded-md border border-border bg-background px-2 py-1.5 text-xs ${className}`}
+    >
+      {UFS.map((uf) => (
+        <option key={uf} value={uf}>
+          {uf}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function PanelTitle({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {icon && <div className="text-primary">{icon}</div>}
+      <div>
+        <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{title}</div>
+        {subtitle && <div className="text-[11px] text-muted-foreground">{subtitle}</div>}
+      </div>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="grid place-items-center p-6 text-sm text-muted-foreground">
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function updateBaseDraft(
+  setBases: React.Dispatch<React.SetStateAction<any[]>>,
+  id: string,
+  patch: Record<string, unknown>,
+) {
+  setBases((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+}
+
+function emptyBaseForm() {
+  return {
+    id: "",
+    name: "",
+    city: "",
+    uf: "PE",
+    latitude: "",
+    longitude: "",
+    coverage_cities: "",
+  };
 }
 
 function parseCities(input: string | string[]) {
@@ -651,6 +1075,22 @@ function parseOptionalNumber(input: unknown) {
   if (input === undefined || input === null || input === "") return null;
   const value = Number(input);
   return Number.isFinite(value) ? value : null;
+}
+
+function normalizeSlug(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function getSection(search: any): AdminSection {
+  if (typeof search === "string") {
+    return new URLSearchParams(search).get("section") === "bases" ? "bases" : "users";
+  }
+  return search?.section === "bases" ? "bases" : "users";
 }
 
 function formatDate(value: string | null | undefined) {

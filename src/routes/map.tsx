@@ -10,7 +10,7 @@ import {
 } from "@/components/OccurrenceMap";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { createCircularCoverageArea } from "@/lib/geo";
+import { createCircularCoverageArea, loadLocalCoverageAreasForCities } from "@/lib/geo";
 import { normalizeOccurrence, normalizeOperator } from "@/lib/rescueradio";
 import { Crosshair, Filter, MapPin, RefreshCw, Users, X, Plus, Check } from "lucide-react";
 
@@ -63,6 +63,8 @@ const DEFAULT_BASE: BaseInfo = {
   id: "base-central",
   name: "Base Central",
   city: "Grande Recife",
+  latitude: GRANDE_RECIFE_CENTER[0],
+  longitude: GRANDE_RECIFE_CENTER[1],
 };
 
 const COVERAGE_BY_BASE: Record<
@@ -156,7 +158,24 @@ function coverageForBase(baseId?: string, base?: BaseInfo) {
 function coordinateForBase(base?: BaseInfo): [number, number] | null {
   const lat = Number(base?.latitude);
   const lng = Number(base?.longitude);
-  return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return [lat, lng];
+}
+
+function centerFromCoverageAreas(areas: CoverageArea[]): [number, number] | null {
+  const points = areas.flatMap((area) => area.points || []);
+  if (!points.length) return null;
+  const total = points.reduce(
+    (acc, [lat, lng]) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return acc;
+      return { lat: acc.lat + lat, lng: acc.lng + lng, count: acc.count + 1 };
+    },
+    { lat: 0, lng: 0, count: 0 },
+  );
+  if (!total.count) return null;
+  return [total.lat / total.count, total.lng / total.count];
 }
 
 function normPrio(p: any): Priority {
@@ -190,6 +209,8 @@ function MapPage() {
   const [newId, setNewId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [recenterToken, setRecenterToken] = useState(0);
+  const [localCoverageAreas, setLocalCoverageAreas] = useState<CoverageArea[]>([]);
+  const [coverageNotice, setCoverageNotice] = useState("");
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   const baseOptions = bases.length ? bases : [DEFAULT_BASE];
@@ -198,12 +219,17 @@ function MapPage() {
     () => coverageForBase(selectedBaseId, selectedBase),
     [selectedBaseId, selectedBase],
   );
-  const selectedCoverageCities = selectedBase?.coverage_cities?.length
-    ? selectedBase.coverage_cities
-    : selectedBase?.city
-      ? [selectedBase.city]
-      : ["Recife", "Olinda", "Jaboatao dos Guararapes", "Paulista"];
-  const mapCoverageAreas = selectedCoverage.areas;
+  const selectedCoverageCities = useMemo(
+    () =>
+      selectedBase?.coverage_cities?.length
+        ? selectedBase.coverage_cities
+        : selectedBase?.city
+          ? [selectedBase.city]
+          : ["Recife", "Olinda", "Jaboatao dos Guararapes", "Paulista"],
+    [selectedBase],
+  );
+  const selectedCoverageCitiesKey = selectedCoverageCities.join("|");
+  const mapCoverageAreas = localCoverageAreas.length ? localCoverageAreas : selectedCoverage.areas;
 
   const baseCenter: [number, number] = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -217,11 +243,13 @@ function MapPage() {
     const selectedBase = bases.find((b) => b.id === selectedBaseId);
     const selectedBaseCoord = coordinateForBase(selectedBase);
     if (selectedBaseCoord) return selectedBaseCoord;
+    const coverageCenter = centerFromCoverageAreas(localCoverageAreas);
+    if (coverageCenter) return coverageCenter;
     const b: any = (profile as any)?.base;
     const profileBaseCoord = coordinateForBase(b);
     if (profileBaseCoord) return profileBaseCoord;
     return selectedCoverage.center;
-  }, [bases, profile, selectedBaseId, selectedCoverage.center]);
+  }, [bases, profile, selectedBaseId, selectedCoverage.center, localCoverageAreas]);
   const [center, setCenter] = useState<[number, number]>(baseCenter);
 
   const auditFocus = useMemo(() => {
@@ -256,7 +284,8 @@ function MapPage() {
   const focusBase = (baseId = selectedBaseId) => {
     const selectedBase = bases.find((b) => b.id === baseId);
     const fallback = coverageForBase(baseId, selectedBase).center;
-    const next: [number, number] = coordinateForBase(selectedBase) || fallback;
+    const next: [number, number] =
+      coordinateForBase(selectedBase) || centerFromCoverageAreas(localCoverageAreas) || fallback;
     setCenter(next);
     setRecenterToken((v) => v + 1);
   };
@@ -325,6 +354,29 @@ function MapPage() {
   useEffect(() => {
     if (showTeams) loadTeams();
   }, [loadTeams, showTeams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCoverageNotice("Carregando fronteiras locais...");
+    loadLocalCoverageAreasForCities(selectedCoverageCities)
+      .then((areas) => {
+        if (cancelled) return;
+        setLocalCoverageAreas(areas);
+        setCoverageNotice(
+          areas.length
+            ? "Fronteiras municipais locais ativas."
+            : "Cobertura estimada localmente a partir da coordenada da base.",
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLocalCoverageAreas([]);
+        setCoverageNotice("Cobertura estimada localmente a partir da coordenada da base.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCoverageCities, selectedCoverageCitiesKey]);
 
   useEffect(() => {
     setCenter(baseCenter);
@@ -626,7 +678,7 @@ function MapPage() {
             ))}
           </div>
           <div className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Cobertura estimada localmente a partir da coordenada da base.
+            {coverageNotice || "Cobertura estimada localmente a partir da coordenada da base."}
           </div>
         </div>
 

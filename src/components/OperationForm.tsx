@@ -5,6 +5,8 @@ import { OperatorSelector } from "./OperatorSelector";
 import { MapPin, Loader2 } from "lucide-react";
 import { normalizeOperation } from "@/lib/rescueradio";
 
+const DEFAULT_CENTER: [number, number] = [-8.0476, -34.877];
+
 interface Base {
   id: string;
   name?: string;
@@ -29,13 +31,23 @@ export function OperationForm({ onCreated }: Props) {
   const [participantes, setParticipantes] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fallbackCenter = useMemo<[number, number]>(() => [-8.0476, -34.877], []);
   const selectedBase = bases.find((base) => base.id === baseId);
   const baseCenter = useMemo<[number, number]>(() => {
     const lat = Number(selectedBase?.latitude);
     const lng = Number(selectedBase?.longitude);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : fallbackCenter;
-  }, [fallbackCenter, selectedBase?.latitude, selectedBase?.longitude]);
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      return DEFAULT_CENTER;
+    }
+    return [lat, lng];
+  }, [selectedBase?.latitude, selectedBase?.longitude]);
 
   useEffect(() => {
     api<Base[]>("/bases")

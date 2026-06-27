@@ -5,6 +5,7 @@ export interface RescueUser {
   display_name?: string;
   role: Role;
   base_id?: string;
+  uf_scope?: string | null;
   profile?: RescueProfile | null;
   [key: string]: any;
 }
@@ -21,6 +22,7 @@ export interface RescueProfile {
   funcao?: string;
   contact?: string;
   contato?: string;
+  email?: string;
   status?: "disponivel" | "em_operacao" | "indisponivel";
   connection_status?: "online" | "offline";
   last_seen_at?: string | null;
@@ -59,14 +61,14 @@ export function normalizeProfile(
     funcao: raw.funcao || raw.function || "",
     contact: raw.contact || raw.contato || "",
     contato: raw.contato || raw.contact || "",
+    email: raw.email || "",
     skills,
     competencias: skills,
     complete:
       typeof status.complete === "boolean"
         ? status.complete
         : Boolean(raw.full_name || raw.operational_name || raw.nome_operacional) &&
-          Boolean(raw.base_id) &&
-          Boolean(raw.function || raw.funcao),
+          Boolean(raw.base_id),
   };
 }
 
@@ -76,8 +78,8 @@ export function profileToApiPayload(form: {
   callsign?: string;
   nome_operacional: string;
   base_id: string;
-  funcao: string;
   contato: string;
+  email?: string;
   status: string;
   competencias: string | string[];
 }) {
@@ -93,8 +95,9 @@ export function profileToApiPayload(form: {
     callsign: form.callsign?.trim(),
     operational_name: form.nome_operacional.trim(),
     base_id: form.base_id.trim(),
-    function: form.funcao.trim(),
+    function: "",
     contact: form.contato.trim(),
+    email: form.email?.trim() || "",
     status: form.status,
     skills,
   };

@@ -25,7 +25,6 @@ describe("rescueradio normalizers", () => {
       profileToApiPayload({
         nome_operacional: " Bravo ",
         base_id: "base-central",
-        funcao: "medico",
         contato: "radio 2",
         status: "disponivel",
         competencias: "APH, resgate",
@@ -36,8 +35,9 @@ describe("rescueradio normalizers", () => {
       callsign: undefined,
       operational_name: "Bravo",
       base_id: "base-central",
-      function: "medico",
+      function: "",
       contact: "radio 2",
+      email: "",
       status: "disponivel",
       skills: ["APH", "resgate"],
     });
