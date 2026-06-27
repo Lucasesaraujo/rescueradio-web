@@ -63,6 +63,8 @@ const DEFAULT_BASE: BaseInfo = {
   id: "base-central",
   name: "Base Central",
   city: "Grande Recife",
+  latitude: GRANDE_RECIFE_CENTER[0],
+  longitude: GRANDE_RECIFE_CENTER[1],
 };
 
 const COVERAGE_BY_BASE: Record<
@@ -156,7 +158,10 @@ function coverageForBase(baseId?: string, base?: BaseInfo) {
 function coordinateForBase(base?: BaseInfo): [number, number] | null {
   const lat = Number(base?.latitude);
   const lng = Number(base?.longitude);
-  return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return [lat, lng];
 }
 
 function normPrio(p: any): Priority {
