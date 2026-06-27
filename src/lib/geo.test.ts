@@ -3,6 +3,7 @@ import {
   createCircularCoverageArea,
   loadLocalCoverageAreasForCities,
   normalizeCityName,
+  searchLocalMunicipalities,
 } from "./geo";
 
 describe("geo utilities", () => {
@@ -56,5 +57,46 @@ describe("geo utilities", () => {
     expect(areas).toHaveLength(1);
     expect(areas[0].label).toBe("Recife");
     expect(areas[0].points[0]).toEqual([-8.1, -34.9]);
+  });
+
+  it("searches municipality names from local boundary files", async () => {
+    const geojson = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [-38.6, -3.8],
+                [-38.4, -3.8],
+                [-38.4, -3.6],
+                [-38.6, -3.8],
+              ],
+            ],
+          },
+          properties: {
+            id: "2304400",
+            name: "Fortaleza",
+            normalized_name: "fortaleza",
+            uf: "CE",
+          },
+        },
+      ],
+    };
+    const fetcher = async () =>
+      ({
+        ok: true,
+        json: async () => geojson,
+      }) as Response;
+
+    const results = await searchLocalMunicipalities("forta", fetcher);
+
+    expect(results[0]).toMatchObject({
+      name: "Fortaleza",
+      uf: "CE",
+    });
+    expect(results[0].latitude).toBeCloseTo(-3.7, 1);
   });
 });
