@@ -4,6 +4,7 @@ import { AuthGuard } from "@/components/RoleGuard";
 import { Shell } from "@/components/Shell";
 import { ConfirmDialog, type ConfirmDialogState } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { searchLocalMunicipalities, type MunicipalitySearchResult } from "@/lib/geo";
 import {
   Building2,
@@ -62,6 +63,7 @@ const UFS = [
 type AdminSection = "users" | "bases";
 
 function AdminPage() {
+  const { user: currentUser } = useAuth();
   const routeSearch = useRouterState({ select: (state) => state.location.search as any });
   const section = getSection(routeSearch);
   const [users, setUsers] = useState<any[]>([]);
@@ -148,6 +150,19 @@ function AdminPage() {
     });
   };
 
+  const deleteUser = async (user: any) => {
+    setConfirmState({
+      title: "Excluir usuario",
+      description: `O usuario ${user.username} sera removido do sistema. Esta acao nao remove registros historicos de auditoria.`,
+      confirmLabel: "Excluir usuario",
+      variant: "danger",
+      onConfirm: async () => {
+        await api(`/users/${encodeURIComponent(user.username)}`, { method: "DELETE" });
+        load();
+      },
+    });
+  };
+
   const createInvite = async (event: React.FormEvent) => {
     event.preventDefault();
     setSavingInvite(true);
@@ -179,7 +194,7 @@ function AdminPage() {
   const revokeInvite = async (invite: any) => {
     setConfirmState({
       title: "Revogar convite",
-      description: `O convite para ${invite.role} sera invalidado.`,
+      description: `O convite para ${roleLabel(invite.role)} sera invalidado.`,
       confirmLabel: "Revogar",
       variant: "warning",
       onConfirm: async () => {
@@ -305,12 +320,14 @@ function AdminPage() {
       ) : (
         <UsersSection
           users={users}
+          currentUsername={currentUser?.username}
           bases={bases}
           invites={invites}
           loading={loading}
           onRefresh={load}
           onCreateInvite={() => setInviteModalOpen(true)}
           onUpdateUser={updateUser}
+          onDeleteUser={deleteUser}
           onUsersDraft={setUsers}
           onRevokeInvite={revokeInvite}
         />
@@ -321,22 +338,26 @@ function AdminPage() {
 
 function UsersSection({
   users,
+  currentUsername,
   bases,
   invites,
   loading,
   onRefresh,
   onCreateInvite,
   onUpdateUser,
+  onDeleteUser,
   onUsersDraft,
   onRevokeInvite,
 }: {
   users: any[];
+  currentUsername?: string;
   bases: any[];
   invites: any[];
   loading: boolean;
   onRefresh: () => void;
   onCreateInvite: () => void;
   onUpdateUser: (user: any) => void;
+  onDeleteUser: (user: any) => void;
   onUsersDraft: React.Dispatch<React.SetStateAction<any[]>>;
   onRevokeInvite: (invite: any) => void;
 }) {
@@ -393,9 +414,9 @@ function UsersSection({
                         }
                         className="rounded-md border border-border bg-background px-2 py-1 text-xs"
                       >
-                        <option value="operador">operador</option>
-                        <option value="comandante">comandante</option>
-                        <option value="admin">admin</option>
+                        <option value="operador">Operador</option>
+                        <option value="comandante">Comandante</option>
+                        <option value="admin">Admin</option>
                       </select>
                     </td>
                     <td className="px-3 py-2">
@@ -436,12 +457,26 @@ function UsersSection({
                       )}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <button
-                        onClick={() => onUpdateUser(user)}
-                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-semibold text-primary"
-                      >
-                        <Save className="h-3.5 w-3.5" /> Salvar
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => onUpdateUser(user)}
+                          className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-semibold text-primary"
+                        >
+                          <Save className="h-3.5 w-3.5" /> Salvar
+                        </button>
+                        <button
+                          onClick={() => onDeleteUser(user)}
+                          disabled={user.username === currentUsername}
+                          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2 py-1 text-xs font-semibold text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+                          title={
+                            user.username === currentUsername
+                              ? "Usuario autenticado nao pode se excluir"
+                              : "Excluir usuario"
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -473,7 +508,7 @@ function UsersSection({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-mono uppercase tracking-wide text-muted-foreground">
-                      {invite.role} - {invite.uf_scope || invite.base_id || "global"}
+                      {roleLabel(invite.role)} - {invite.uf_scope || invite.base_id || "global"}
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {used
@@ -673,9 +708,9 @@ function InviteModal({
             onChange={(event) => onChange({ ...invite, role: event.target.value })}
             className={inputClass}
           >
-            <option value="operador">operador</option>
-            <option value="comandante">comandante</option>
-            <option value="admin">admin</option>
+            <option value="operador">Operador</option>
+            <option value="comandante">Comandante</option>
+            <option value="admin">Admin</option>
           </select>
         </Field>
         {invite.role === "operador" && (
@@ -1097,4 +1132,11 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function roleLabel(role: string) {
+  if (role === "operador") return "Operador";
+  if (role === "comandante") return "Comandante";
+  if (role === "admin") return "Admin";
+  return role;
 }
