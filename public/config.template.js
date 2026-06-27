@@ -1,9 +1,15 @@
-const gatewayWsUrlBase64 = '${GATEWAY_WS_URL_BASE64}';
+const gatewayWsUrlBase64 = "${GATEWAY_WS_URL_BASE64}";
+const gatewayHttpUrlBase64 = "${GATEWAY_HTTP_URL_BASE64}";
+
+function decodeConfigValue(value) {
+  try {
+    return value ? atob(value) : "";
+  } catch {
+    return "";
+  }
+}
 
 window.__RESCUERADIO_CONFIG__ = {
-  gatewayWsUrl: gatewayWsUrlBase64
-    ? new TextDecoder().decode(
-        Uint8Array.from(atob(gatewayWsUrlBase64), (character) => character.charCodeAt(0)),
-      )
-    : '',
+  gatewayWsUrl: decodeConfigValue(gatewayWsUrlBase64),
+  gatewayHttpUrl: decodeConfigValue(gatewayHttpUrlBase64),
 };
