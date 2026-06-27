@@ -1,115 +1,109 @@
 # RescueRadio Web
 
-Aplicação Angular do RescueRadio para comunicação em tempo real entre equipes de resgate.
+Frontend operacional do RescueRadio. A interface usa React, TanStack Router,
+Tailwind, lucide-react e Leaflet/OpenStreetMap, com foco no chat em tempo real
+como experiencia principal.
 
-## Responsabilidades
+## Fluxo principal
 
-- entrada no canal;
-- chat em tempo real;
-- exibição do briefing;
-- lista de membros ativos;
-- eventos de conexão;
-- cliente WebSocket com reconexão automática;
-- futuramente, login e controle de acesso por roles.
+1. O primeiro admin e criado por bootstrap; os demais usuarios entram por convite.
+2. Usuario sem perfil completo passa pelo onboarding operacional.
+3. O cockpit abre com sidebar para Central de Comunicacao, Mapa, Operacoes,
+   Historico, Observabilidade e Gestao de Usuarios.
+4. O chat geral usa o canal `base:{base_id}:geral`.
+5. Chats de operacao usam `operacao:{operation_id}`.
+6. Operacao finalizada bloqueia novas mensagens e mantem auditoria.
+7. Operador designado recebe push global `OPERATION_ASSIGNED` e briefing modal.
 
-## Decisão Tecnológica
-
-O frontend utiliza Angular 21 com TypeScript. O Angular foi escolhido por
-oferecer uma estrutura organizada para componentes, templates, estilos,
-formulários e testes, além de atualização reativa da interface durante o
-recebimento de eventos em tempo real. O TypeScript também permite representar
-explicitamente os contratos das mensagens WebSocket e reduzir erros de
-integração com a API.
-
-Na arquitetura do RescueRadio, o navegador não precisa conhecer diretamente o
-container da API. O cliente abre uma conexão WebSocket com o Kong, que encaminha
-o caminho `/ws` para o FastAPI. A interface interpreta os eventos de conexão,
-briefing, mensagens e presença, mantendo a lista de mensagens e socorristas
-ativos visível para o usuário.
-
-A Entrega 2 também possui um cliente de terminal no repositório
-`rescueradio-api`. Esse cliente existe para validar o protocolo em um nível
-mais baixo, via console, como exigido pela rubrica. A interface gráfica consome
-o mesmo endpoint e o mesmo contrato WebSocket, mas representa a experiência
-principal do produto.
-
-## Comportamento Do Chat
-
-O backend não ecoa `SEND_MESSAGE` para o próprio remetente. Por isso, a
-interface adiciona localmente a mensagem enviada assim que o `socket.send()` é
-executado com sucesso. Mensagens de outros socorristas, briefing, presença e
-erros continuam vindo do servidor.
-
-Se a conexão cair sem o usuário clicar em sair, a interface muda para
-`Reconectando` e tenta abrir uma nova conexão automaticamente. Durante esse
-período, o histórico permanece visível e o envio fica bloqueado até o WebSocket
-voltar para `Conectado`.
-
-## Estrutura de Pastas
-
-```text
-rescueradio-web/
-|-- src/
-|   |-- app/                    # componente, template, estilos e testes
-|   |-- index.html
-|   |-- main.ts
-|   `-- styles.css
-|-- public/
-|   |-- config.js               # configuração usada no desenvolvimento
-|   `-- config.template.js      # modelo preenchido no container
-|-- docker-entrypoint.d/        # configuração runtime do gateway
-|-- Dockerfile
-|-- angular.json
-|-- package.json
-`-- README.md
-```
-
-O módulo `src/app/runtime-config.ts` resolve a URL WebSocket do gateway. Em
-container, o script de entrada gera a configuração a partir de
-`GATEWAY_WS_URL`, sem exigir um novo build do Angular.
-
-## Desenvolvimento
+## Desenvolvimento local
 
 Requisitos:
 
-- Node.js 22;
-- npm 10.
-
-Instale as dependências e inicie o servidor:
+- Node.js 22+
+- npm
 
 ```bash
-npm ci
-npm start
+npm install
+npm run dev
 ```
 
-A aplicação fica disponível em <http://localhost:4200>.
+Abra a URL mostrada pelo Vite, normalmente `http://localhost:3000` ou
+`http://localhost:5173`.
 
-O cliente WebSocket usa `window.__RESCUERADIO_CONFIG__.gatewayWsUrl`. Sem uma
-configuração explícita, usa o hostname da página e acessa o Kong pela porta
-`8001`.
+## Configuracao
 
-## Testes e Build
+Em desenvolvimento, o app le variaveis `VITE_*`:
 
 ```bash
-npm test -- --watch=false
+VITE_API_BASE_URL=http://localhost:8001/api
+VITE_WS_BASE_URL=ws://localhost:8000
+```
+
+No container, o Nginx serve `/config.js`, gerado no boot por:
+
+```bash
+GATEWAY_HTTP_URL=http://localhost:8001/api
+GATEWAY_WS_URL=ws://localhost:8000
+```
+
+## Build
+
+```bash
 npm run build
 ```
+
+O Dockerfile publica o conteudo estatico de `dist` no Nginx.
+
+## Testes
+
+```bash
+npm test
+npm run test:coverage
+npm run lint
+```
+
+A configuracao atual exige cobertura minima de 50% para statements, branches,
+functions e lines no recorte critico do frontend: dialogos reutilizaveis,
+status, normalizadores, mapa local e notificacoes globais.
 
 ## Docker
 
 ```bash
 docker build -t rescueradio-web:local .
-docker run --rm -p 4200:80 -e GATEWAY_WS_URL=ws://localhost:8001 rescueradio-web:local
+docker run --rm -p 4200:80 ^
+  -e GATEWAY_WS_URL=ws://localhost:8000 ^
+  -e GATEWAY_HTTP_URL=http://localhost:8001/api ^
+  rescueradio-web:local
 ```
 
-Para executar o ambiente completo, use o repositório `rescueradio-infra`.
+Com o ambiente completo:
 
-## Fluxo de Desenvolvimento
+```bash
+cd ..\rescueradio-infra
+docker compose -f compose\docker-compose.yml up -d
+```
 
-- `main`: homologação das versões aprovadas em `develop`;
-- `develop`: desenvolvimento e integração das funcionalidades aprovadas;
-- `feature/*`: desenvolvimento isolado, sempre criado a partir de `develop`.
+Abra `http://localhost:4200`.
 
-As branches de funcionalidade devem voltar para `develop` por pull request
-após a aprovação do CI. A promoção para homologação ocorre por pull request
-de `develop` para `main`.
+## Cenarios manuais
+
+- Bootstrap: na tela de login, use "Configurar primeiro admin" e informe a
+  `BOOTSTRAP_ADMIN_KEY` do backend.
+- Convite: como admin, abra Gestao de Usuarios, gere um convite e use o codigo
+  na tela de cadastro de um operador/comandante.
+- Multiplas instancias: abra duas abas em `http://localhost:4200`, faca login
+  com usuarios diferentes e entre na Central de Comunicacao.
+- Briefing automatico: envie algumas mensagens em uma aba, abra uma nova aba
+  com outro usuario da mesma base e confirme que as ultimas mensagens aparecem
+  ao conectar.
+- Reconexao: reinicie a API ou derrube a conexao; a tela deve mostrar
+  reconexao silenciosa e voltar sem travar.
+- Operacao: como comandante/admin, crie uma ocorrencia no mapa, selecione
+  operadores, abra o chat da operacao, finalize e confira o historico.
+- Resultado: ao finalizar uma operacao, selecione `Sucesso` ou `Falha`; o
+  historico e o mapa usam esse resultado para o pin de auditoria.
+- Mapa: defina coordenada e cidades cobertas na base. O mapa destaca uma
+  cobertura local estimada a partir da coordenada da base, sem depender de
+  geocoding externo durante a operacao.
+- Observabilidade: acesse a pagina Observabilidade para links de API, Kong,
+  Prometheus, Grafana e Loki.
