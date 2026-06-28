@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Save,
   Shield,
+  ShieldAlert,
   Ticket,
   Trash2,
   Users,
@@ -75,6 +76,8 @@ function AdminPage() {
   const [baseModalOpen, setBaseModalOpen] = useState(false);
   const [savingInvite, setSavingInvite] = useState(false);
   const [savingBase, setSavingBase] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [baseError, setBaseError] = useState("");
   const [confirmState, setConfirmState] = useState<ConfirmDialogState | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [newBase, setNewBase] = useState(emptyBaseForm());
@@ -167,6 +170,7 @@ function AdminPage() {
     event.preventDefault();
     setSavingInvite(true);
     setCreatedInviteCode("");
+    setInviteError("");
     const payload =
       newInvite.role === "admin"
         ? { role: "admin", base_id: null, uf_scope: null }
@@ -185,7 +189,7 @@ function AdminPage() {
       setCreatedInviteCode(res.code || "");
       load();
     } catch (e: any) {
-      alert(e?.message || "Falha ao criar convite");
+      setInviteError(e?.message || "Falha ao criar convite");
     } finally {
       setSavingInvite(false);
     }
@@ -207,6 +211,7 @@ function AdminPage() {
   const createBase = async (event: React.FormEvent) => {
     event.preventDefault();
     setSavingBase(true);
+    setBaseError("");
     try {
       await api("/bases", {
         method: "POST",
@@ -226,7 +231,7 @@ function AdminPage() {
       setBaseModalOpen(false);
       load();
     } catch (e: any) {
-      alert(e?.message || "Falha ao criar base");
+      setBaseError(e?.message || "Falha ao criar base");
     } finally {
       setSavingBase(false);
     }
@@ -289,21 +294,27 @@ function AdminPage() {
         bases={bases}
         invite={newInvite}
         createdCode={createdInviteCode}
+        error={inviteError}
         busy={savingInvite}
         onChange={setNewInvite}
         onClose={() => {
           setInviteModalOpen(false);
           setCreatedInviteCode("");
+          setInviteError("");
         }}
         onSubmit={createInvite}
       />
       <BaseModal
         open={baseModalOpen}
         form={newBase}
+        error={baseError}
         busy={savingBase}
         onChange={setNewBase}
         onApplyMunicipality={applyMunicipality}
-        onClose={() => setBaseModalOpen(false)}
+        onClose={() => {
+          setBaseModalOpen(false);
+          setBaseError("");
+        }}
         onSubmit={createBase}
       />
 
@@ -660,6 +671,7 @@ function InviteModal({
   bases,
   invite,
   createdCode,
+  error,
   busy,
   onChange,
   onClose,
@@ -669,6 +681,7 @@ function InviteModal({
   bases: any[];
   invite: any;
   createdCode: string;
+  error: string;
   busy: boolean;
   onChange: (invite: any) => void;
   onClose: () => void;
@@ -701,6 +714,7 @@ function InviteModal({
           </div>
         </div>
       )}
+      {error && <InlineError message={error} />}
       <form onSubmit={onSubmit} className="space-y-3">
         <Field label="Papel">
           <select
@@ -767,6 +781,7 @@ function InviteModal({
 function BaseModal({
   open,
   form,
+  error,
   busy,
   onChange,
   onApplyMunicipality,
@@ -775,6 +790,7 @@ function BaseModal({
 }: {
   open: boolean;
   form: ReturnType<typeof emptyBaseForm>;
+  error: string;
   busy: boolean;
   onChange: React.Dispatch<React.SetStateAction<ReturnType<typeof emptyBaseForm>>>;
   onApplyMunicipality: (municipality: MunicipalitySearchResult) => void;
@@ -816,6 +832,7 @@ function BaseModal({
       subtitle="Busque um municipio das malhas locais ou informe coordenadas manualmente"
       onClose={onClose}
     >
+      {error && <InlineError message={error} />}
       <form onSubmit={onSubmit} className="space-y-3">
         <Field label="Buscar municipio">
           <input
@@ -1075,6 +1092,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </span>
       {children}
     </label>
+  );
+}
+
+function InlineError({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>{message}</span>
+    </div>
   );
 }
 

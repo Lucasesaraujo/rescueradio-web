@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { normalizeOperation } from "@/lib/rescueradio";
 import { useAuth } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, RefreshCw, Radio, X, CheckCircle2, MapPin } from "lucide-react";
+import { Plus, RefreshCw, Radio, X, CheckCircle2, MapPin, ShieldAlert } from "lucide-react";
 
 export const Route = createFileRoute("/operations")({
   component: () => (
@@ -29,6 +29,7 @@ function OperationsPage() {
   const [closing, setClosing] = useState(false);
   const [summary, setSummary] = useState("");
   const [outcome, setOutcome] = useState<"success" | "failure">("success");
+  const [closeError, setCloseError] = useState("");
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -89,6 +90,7 @@ function OperationsPage() {
   const close = async () => {
     if (!selected) return;
     setClosing(true);
+    setCloseError("");
     try {
       await api(`/operations/${selected.id}/close`, { method: "POST", json: { summary, outcome } });
       setSelected({ ...selected, status: "closed", outcome });
@@ -96,7 +98,7 @@ function OperationsPage() {
       setOutcome("success");
       load();
     } catch (e: any) {
-      alert(e?.message || "Erro ao finalizar operacao");
+      setCloseError(e?.message || "Erro ao finalizar operacao");
     } finally {
       setClosing(false);
     }
@@ -187,46 +189,54 @@ function OperationsPage() {
           </div>
         ) : selected ? (
           <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-            <div className="flex items-center justify-between gap-3 border-b border-border bg-surface/60 px-4 py-3">
-              <div className="min-w-0">
-                <div className="truncate font-semibold">{selected.titulo || selected.title}</div>
-                <div className="text-xs text-muted-foreground">
-                  Operacao - {selected.id} - Duracao {duration}
+            <div>
+              <div className="flex items-center justify-between gap-3 border-b border-border bg-surface/60 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{selected.titulo || selected.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Operacao - {selected.id} - Duracao {duration}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={mapHref}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/60 hover:text-primary"
+                  >
+                    <MapPin className="h-3.5 w-3.5" /> Ver no Mapa
+                  </a>
+                  {canCommand && selected.status !== "closed" && (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <input
+                        value={summary}
+                        onChange={(e) => setSummary(e.target.value)}
+                        placeholder="Resumo de encerramento"
+                        className="w-56 rounded-md border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                      />
+                      <select
+                        value={outcome}
+                        onChange={(e) => setOutcome(e.target.value as "success" | "failure")}
+                        className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary"
+                      >
+                        <option value="success">Sucesso</option>
+                        <option value="failure">Falha</option>
+                      </select>
+                      <button
+                        onClick={close}
+                        disabled={closing || !summary.trim()}
+                        className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Finalizar
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={mapHref}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/60 hover:text-primary"
-                >
-                  <MapPin className="h-3.5 w-3.5" /> Ver no Mapa
-                </a>
-                {canCommand && selected.status !== "closed" && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={summary}
-                      onChange={(e) => setSummary(e.target.value)}
-                      placeholder="Resumo de encerramento"
-                      className="w-56 rounded-md border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
-                    />
-                    <select
-                      value={outcome}
-                      onChange={(e) => setOutcome(e.target.value as "success" | "failure")}
-                      className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary"
-                    >
-                      <option value="success">Sucesso</option>
-                      <option value="failure">Falha</option>
-                    </select>
-                    <button
-                      onClick={close}
-                      disabled={closing || !summary.trim()}
-                      className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Finalizar
-                    </button>
-                  </div>
-                )}
-              </div>
+              {closeError && (
+                <div className="flex items-start gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+                  <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{closeError}</span>
+                </div>
+              )}
             </div>
             <ChatRoom
               channelId={`operacao:${selected.id}`}
