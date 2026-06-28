@@ -61,11 +61,18 @@ const NAV: NavItem[] = [
   },
 ];
 
+const STATUS_OPTIONS = [
+  { value: "disponivel", label: "Disponível", tone: "text-primary" },
+  { value: "ausente", label: "Ausente", tone: "text-[color:var(--color-warning)]" },
+  { value: "em_operacao", label: "Em operação", tone: "text-destructive" },
+] as const;
+
 export function Shell({ children }: { children: ReactNode }) {
   const { user, profile, logout, refreshProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [assignment, setAssignment] = useState<any | null>(null);
   const [assignmentMessages, setAssignmentMessages] = useState<any[]>([]);
   const [adminMenuOpen, setAdminMenuOpenState] = useState(readAdminMenuOpen);
@@ -73,6 +80,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const routeSearch = useRouterState({ select: (s) => s.location.search as any });
   const seenAssignments = useRef<Set<string>>(new Set());
+  const statusMenuRef = useRef<HTMLDivElement | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -83,12 +91,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const adminSection = getAdminSection(routeSearch);
 
   const currentStatus = (profile?.status as string) || "disponivel";
-  const statusTone =
-    currentStatus === "em_operacao"
-      ? "text-destructive"
-      : currentStatus === "ausente" || currentStatus === "indisponivel"
-        ? "text-[color:var(--color-warning)]"
-        : "text-primary";
+  const currentStatusOption =
+    STATUS_OPTIONS.find((option) => option.value === currentStatus) || STATUS_OPTIONS[0];
+  const statusTone = currentStatusOption.tone;
 
   const setAdminMenuOpen = (value: boolean | ((current: boolean) => boolean)) => {
     setAdminMenuOpenState((current) => {
@@ -119,6 +124,17 @@ export function Shell({ children }: { children: ReactNode }) {
       setStatusBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!statusMenuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!statusMenuRef.current?.contains(event.target as Node)) {
+        setStatusMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", closeOnOutsideClick);
+    return () => window.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [statusMenuOpen]);
 
   useEffect(() => {
     if (!user || pathname === "/auth" || pathname === "/onboarding") return;
@@ -302,35 +318,68 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
         <div className="border-t border-sidebar-border p-3">
           {profile && (
-            <label
-              className={cn(
-                "mb-2 flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-[11px]",
-                collapsed && "md:justify-center md:px-1",
-              )}
-              title="Status operacional"
+            <div
+              ref={statusMenuRef}
+              className={cn("relative mb-2", collapsed && "md:flex md:justify-center")}
             >
-              <span className={`status-dot ${statusTone}`} style={{ background: "currentColor" }} />
-              <select
-                value={currentStatus}
+              <button
+                type="button"
                 disabled={statusBusy}
-                onChange={(e) => updateStatus(e.target.value)}
                 className={cn(
-                  "min-w-0 bg-transparent font-semibold outline-none",
-                  statusTone,
-                  collapsed && "md:hidden",
+                  "flex w-full items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-[11px] transition hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60",
+                  collapsed && "md:h-8 md:w-8 md:justify-center md:px-0",
                 )}
+                onClick={() => setStatusMenuOpen((value) => !value)}
+                title="Status operacional"
               >
-                <option className="bg-surface" value="disponivel">
-                  Disponivel
-                </option>
-                <option className="bg-surface" value="ausente">
-                  Ausente
-                </option>
-                <option className="bg-surface" value="em_operacao">
-                  Em operacao
-                </option>
-              </select>
-            </label>
+                <span
+                  className={`status-dot ${statusTone}`}
+                  style={{ background: "currentColor" }}
+                />
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-left font-semibold",
+                    statusTone,
+                    collapsed && "md:hidden",
+                  )}
+                >
+                  {currentStatusOption.label}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                    statusMenuOpen && "rotate-180",
+                    collapsed && "md:hidden",
+                  )}
+                />
+              </button>
+              {statusMenuOpen && !collapsed && (
+                <div className="absolute bottom-full left-0 z-50 mb-2 w-full rounded-md border border-border bg-surface p-1 shadow-xl">
+                  {STATUS_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setStatusMenuOpen(false);
+                        if (option.value !== currentStatus) {
+                          updateStatus(option.value);
+                        }
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] font-semibold transition hover:bg-sidebar-accent",
+                        option.value === currentStatus ? "bg-primary/10" : "text-muted-foreground",
+                      )}
+                    >
+                      <span
+                        className={`status-dot ${option.tone}`}
+                        style={{ background: "currentColor" }}
+                      />
+                      <span className={option.tone}>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <Link
             to="/profile"
