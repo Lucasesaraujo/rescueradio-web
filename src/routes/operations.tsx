@@ -80,12 +80,15 @@ function OperationsPage() {
   const duration = selected?.created_at ? formatDuration(selected.created_at) : "--:--:--";
   const canCommand = user?.role === "comandante" || user?.role === "admin";
   const occurrence = selected?.occurrence;
+  const selectedOperationId = selected?.id || "";
   const mapHref =
     occurrence?.latitude && occurrence?.longitude
       ? `/map?lat=${encodeURIComponent(occurrence.latitude)}&lng=${encodeURIComponent(
           occurrence.longitude,
-        )}&occurrence_id=${encodeURIComponent(occurrence.id || selected.occurrence_id || "")}`
-      : "/map";
+        )}&occurrence_id=${encodeURIComponent(
+          occurrence.id || selected.occurrence_id || "",
+        )}&operation_id=${encodeURIComponent(selectedOperationId)}&return_to=operations`
+      : `/map?operation_id=${encodeURIComponent(selectedOperationId)}&return_to=operations`;
 
   const close = async () => {
     if (!selected) return;
