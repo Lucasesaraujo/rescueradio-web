@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthGuard } from "@/components/RoleGuard";
 import { Shell } from "@/components/Shell";
@@ -12,7 +12,17 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { createCircularCoverageArea, loadLocalCoverageAreasForCities } from "@/lib/geo";
 import { normalizeOccurrence, normalizeOperator } from "@/lib/rescueradio";
-import { Crosshair, Filter, MapPin, RefreshCw, Users, X, Plus, Check } from "lucide-react";
+import {
+  ArrowLeft,
+  Crosshair,
+  Filter,
+  MapPin,
+  RefreshCw,
+  Users,
+  X,
+  Plus,
+  Check,
+} from "lucide-react";
 
 export const Route = createFileRoute("/map")({
   component: () => (
@@ -193,6 +203,11 @@ function normStatus(s: any): Status {
 
 function MapPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
+  const sourceOperationId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("return_to") === "operations" ? params.get("operation_id") : null;
+  }, []);
   const [bases, setBases] = useState<BaseInfo[]>([]);
   const [selectedBaseId, setSelectedBaseId] = useState<string>(profile?.base_id || DEFAULT_BASE.id);
   const [items, setItems] = useState<any[]>([]);
@@ -494,6 +509,22 @@ function MapPage() {
 
         {/* Top status strip */}
         <div className="pointer-events-none absolute left-14 right-3 top-3 z-[400] flex flex-wrap gap-2">
+          {sourceOperationId && (
+            <button
+              type="button"
+              onClick={() =>
+                navigate({
+                  to: "/operations",
+                  search: { operation_id: sourceOperationId } as any,
+                })
+              }
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-md border border-border bg-surface/90 px-2.5 py-1.5 text-[11px] font-medium text-foreground shadow-lg backdrop-blur hover:border-primary/60 hover:text-primary"
+              aria-label="Voltar à operação"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Voltar à operação
+            </button>
+          )}
           <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-border bg-surface/85 px-2.5 py-1.5 text-[11px] backdrop-blur">
             <span className="font-mono uppercase tracking-[0.2em] text-muted-foreground">
               Ocorrencias
