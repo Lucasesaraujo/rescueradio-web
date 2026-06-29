@@ -14,7 +14,6 @@ import {
   Users,
   PanelLeftClose,
   PanelLeftOpen,
-  Radar,
   Bell,
   X,
 } from "lucide-react";
@@ -66,6 +65,8 @@ const STATUS_OPTIONS = [
   { value: "ausente", label: "Ausente", tone: "text-[color:var(--color-warning)]" },
   { value: "em_operacao", label: "Em operação", tone: "text-destructive" },
 ] as const;
+
+const BRAND_ICON_SRC = "/brand/rescueradio-icon.png";
 
 export function Shell({ children }: { children: ReactNode }) {
   const { user, profile, logout, refreshProfile } = useAuth();
@@ -214,9 +215,11 @@ export function Shell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/15 text-primary">
-            <Radar className="h-4 w-4" />
-          </div>
+          <img
+            src={BRAND_ICON_SRC}
+            alt="RescueRadio"
+            className="h-8 w-8 shrink-0 rounded-md object-cover"
+          />
           <div className={cn("min-w-0", collapsed && "md:hidden")}>
             <div className="truncate text-sm font-semibold tracking-wide">RescueRadio</div>
             <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth, isProfileComplete } from "@/lib/auth";
-import { Radar, Loader2, ShieldAlert } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -49,9 +49,11 @@ function AuthPage() {
       <div className="tactical-grid pointer-events-none absolute inset-0" />
       <div className="relative w-full max-w-sm rounded-lg border border-border bg-surface/80 p-6 shadow-2xl shadow-black/40 backdrop-blur">
         <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-primary/15 text-primary">
-            <Radar className="h-5 w-5" />
-          </div>
+          <img
+            src="/brand/rescueradio-icon.png"
+            alt="RescueRadio"
+            className="h-10 w-10 shrink-0 rounded-md object-cover"
+          />
           <div>
             <div className="text-base font-semibold">RescueRadio</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
