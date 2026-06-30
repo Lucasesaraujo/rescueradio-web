@@ -43,6 +43,8 @@ export interface Member {
   username?: string;
   display_name?: string;
   role?: string;
+  function?: string;
+  funcao?: string;
   status?: string;
   connection_status?: string;
   last_seen_at?: string | null;
@@ -163,7 +165,9 @@ function normalizeMember(input: any): Member {
     ...input,
     username: input?.username || input?.usuario || name,
     display_name: name,
-    role: input?.role || input?.funcao || "operador",
+    role: input?.role || "operador",
+    function: input?.function || input?.funcao || input?.cargo || "",
+    funcao: input?.funcao || input?.function || input?.cargo || "",
     status: input?.status || "online",
     connection_status: input?.connection_status || input?.connectionStatus,
     last_seen_at: input?.last_seen_at || input?.lastSeenAt || null,
@@ -500,23 +504,38 @@ export function ChatRoom({
 
   const mergedOperators = useMemo(() => {
     const byName = new Map<string, Member>();
+    const setOperator = (operator: Member) => {
+      const keys = [operator.username, operator.display_name]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      if (!keys.length) return;
+      const current = keys.map((key) => byName.get(key)).find(Boolean) || {};
+      const merged = { ...current, ...operator };
+      keys.forEach((key) => byName.set(key, merged));
+    };
+
     baseOperators.forEach((operator) => {
-      byName.set(operator.username || operator.display_name || "", {
+      setOperator({
         ...operator,
         status: operator.status || "offline",
         connection_status: operator.connection_status || "offline",
       });
     });
     members.forEach((member) => {
-      const key = member.username || member.display_name || "";
-      byName.set(key, {
-        ...(byName.get(key) || {}),
+      const keys = [member.username, member.display_name]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      const existing = keys.map((key) => byName.get(key)).find(Boolean) || {};
+      setOperator({
+        ...existing,
         ...member,
+        function: member.function || member.funcao || existing.function || existing.funcao || "",
+        funcao: member.funcao || member.function || existing.funcao || existing.function || "",
         connection_status: "online",
-        status: member.status || byName.get(key)?.status || "online",
+        status: member.status || existing.status || "online",
       });
     });
-    const all = [...byName.values()];
+    const all = [...new Set(byName.values())];
     return all.sort((a, b) => {
       const ao = a.connection_status === "online" ? 0 : 1;
       const bo = b.connection_status === "online" ? 0 : 1;
@@ -949,6 +968,9 @@ function RoleIcon({ role }: { role?: string }) {
 }
 
 function OperatorRow({ member, offline }: { member: Member; offline?: boolean }) {
+  const role = member.role || "operador";
+  const operationalFunction =
+    member.function || member.funcao || member.cargo || (role !== "operador" ? role : "Operador");
   const statusTone =
     member.status === "em_operacao"
       ? "text-destructive"
@@ -959,13 +981,13 @@ function OperatorRow({ member, offline }: { member: Member; offline?: boolean })
           : "text-primary";
   return (
     <li className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-surface-2">
-      <RoleIcon role={member.role} />
+      <RoleIcon role={role} />
       <div className="min-w-0 flex-1">
         <div className={cn("truncate font-medium", offline && "text-muted-foreground")}>
           {member.display_name || member.username || "Operador"}
         </div>
         <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
-          {member.role || "operador"} - {offline ? "offline" : member.status || "online"}
+          {operationalFunction} - {offline ? "offline" : member.status || "online"}
         </div>
         {offline && (
           <div className="truncate text-[10px] text-muted-foreground">
