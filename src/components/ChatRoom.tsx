@@ -43,8 +43,8 @@ export interface Member {
   username?: string;
   display_name?: string;
   role?: string;
-  function?: string;
-  funcao?: string;
+  skills?: string[];
+  competencias?: string[];
   status?: string;
   connection_status?: string;
   last_seen_at?: string | null;
@@ -166,8 +166,8 @@ function normalizeMember(input: any): Member {
     username: input?.username || input?.usuario || name,
     display_name: name,
     role: input?.role || "operador",
-    function: input?.function || input?.funcao || input?.cargo || "",
-    funcao: input?.funcao || input?.function || input?.cargo || "",
+    skills: Array.isArray(input?.skills) ? input.skills : input?.competencias || [],
+    competencias: Array.isArray(input?.competencias) ? input.competencias : input?.skills || [],
     status: input?.status || "online",
     connection_status: input?.connection_status || input?.connectionStatus,
     last_seen_at: input?.last_seen_at || input?.lastSeenAt || null,
@@ -529,8 +529,9 @@ export function ChatRoom({
       setOperator({
         ...existing,
         ...member,
-        function: member.function || member.funcao || existing.function || existing.funcao || "",
-        funcao: member.funcao || member.function || existing.funcao || existing.function || "",
+        skills: member.skills || member.competencias || existing.skills || existing.competencias || [],
+        competencias:
+          member.competencias || member.skills || existing.competencias || existing.skills || [],
         connection_status: "online",
         status: member.status || existing.status || "online",
       });
@@ -969,8 +970,7 @@ function RoleIcon({ role }: { role?: string }) {
 
 function OperatorRow({ member, offline }: { member: Member; offline?: boolean }) {
   const role = member.role || "operador";
-  const operationalFunction =
-    member.function || member.funcao || member.cargo || (role !== "operador" ? role : "Operador");
+  const skills = (member.skills || member.competencias || []).filter(Boolean);
   const statusTone =
     member.status === "em_operacao"
       ? "text-destructive"
@@ -987,8 +987,13 @@ function OperatorRow({ member, offline }: { member: Member; offline?: boolean })
           {member.display_name || member.username || "Operador"}
         </div>
         <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
-          {operationalFunction} - {offline ? "offline" : member.status || "online"}
+          {roleLabel(role)} - {offline ? "offline" : statusLabel(member.status)}
         </div>
+        {skills.length > 0 && (
+          <div className="truncate text-[10px] text-muted-foreground">
+            {skills.slice(0, 3).join(", ")}
+          </div>
+        )}
         {offline && (
           <div className="truncate text-[10px] text-muted-foreground">
             Visto por ultimo {formatLastSeen(member.last_seen_at)}
@@ -998,6 +1003,27 @@ function OperatorRow({ member, offline }: { member: Member; offline?: boolean })
       <span className={`status-dot ${statusTone}`} style={{ background: "currentColor" }} />
     </li>
   );
+}
+
+function roleLabel(role?: string) {
+  const labels: Record<string, string> = {
+    admin: "Admin",
+    comandante: "Comandante",
+    operador: "Operador",
+  };
+  return labels[String(role || "operador").toLowerCase()] || "Operador";
+}
+
+function statusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    disponivel: "disponivel",
+    em_operacao: "em operacao",
+    ausente: "ausente",
+    indisponivel: "ausente",
+    online: "online",
+    offline: "offline",
+  };
+  return labels[String(status || "online").toLowerCase()] || status || "online";
 }
 
 function formatLastSeen(value?: string | null) {
