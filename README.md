@@ -280,6 +280,12 @@ GUI:
 2. Abra Observabilidade.
 3. Use os links para Swagger, Prometheus, Grafana e Loki.
 
+Em producao, os links publicos sao:
+
+- Prometheus: <https://prometheus.devflowapp.space>
+- Grafana: <https://grafana.devflowapp.space>
+- Loki: <https://loki.devflowapp.space>
+
 ## Solucao de problemas
 
 - Tela nao conecta: confira se API esta em `8000` e Kong em `8001`.
@@ -288,4 +294,5 @@ GUI:
   `docker compose up -d --force-recreate`.
 - Operador nao ve uma operacao: confirme se ele foi designado ou se pertence ao
   escopo correto.
-- Grafana pede login: use `admin/admin`, salvo alteracao no `.env`.
+- Grafana pede login localmente: use `admin/admin`, salvo alteracao no `.env`.
+  Em producao, use a credencial definida no deploy.

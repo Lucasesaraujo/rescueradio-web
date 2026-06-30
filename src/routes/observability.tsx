@@ -15,9 +15,15 @@ export const Route = createFileRoute("/observability")({
   ),
 });
 
-function serviceUrl(port: string, path = "") {
-  if (typeof window === "undefined") return `http://localhost:${port}${path}`;
-  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
+function serviceUrl(service: "prometheus" | "grafana" | "loki", localPort: string, path = "") {
+  if (typeof window === "undefined") return `http://localhost:${localPort}${path}`;
+
+  const hostname = window.location.hostname;
+  if (hostname.endsWith("devflowapp.space")) {
+    return `https://${service}.devflowapp.space${path}`;
+  }
+
+  return `${window.location.protocol}//${hostname}:${localPort}${path}`;
 }
 
 function apiRoot() {
@@ -30,9 +36,9 @@ function services() {
     { name: "API", url: `${root}/health`, desc: "FastAPI principal" },
     { name: "Swagger", url: `${root}/docs`, desc: "Documentacao interativa da API" },
     { name: "Kong", url: `${root}/health`, desc: "Gateway de roteamento" },
-    { name: "Prometheus", url: serviceUrl("9090"), desc: "Metricas em /metrics" },
-    { name: "Grafana", url: serviceUrl("3000"), desc: "Dashboards visuais" },
-    { name: "Loki", url: serviceUrl("3100", "/ready"), desc: "Status do agregador de logs" },
+    { name: "Prometheus", url: serviceUrl("prometheus", "9090"), desc: "Metricas em /metrics" },
+    { name: "Grafana", url: serviceUrl("grafana", "3000"), desc: "Dashboards visuais" },
+    { name: "Loki", url: serviceUrl("loki", "3100", "/ready"), desc: "Status do agregador de logs" },
   ];
 }
 
