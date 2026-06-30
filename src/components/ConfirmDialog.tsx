@@ -36,7 +36,7 @@ export function ConfirmDialog({ open, state, busy, onCancel, onConfirm }: Props)
         : "bg-primary text-primary-foreground";
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
       <div
         role="dialog"
         aria-modal="true"

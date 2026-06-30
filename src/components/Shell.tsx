@@ -556,7 +556,7 @@ function AssignmentModal({
   onOpen: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-md border border-primary/40 bg-surface shadow-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div className="flex gap-3">

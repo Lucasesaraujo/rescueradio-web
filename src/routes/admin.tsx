@@ -1007,7 +1007,7 @@ function ModalFrame({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
       <section className="w-full max-w-xl rounded-md border border-border bg-surface shadow-2xl">
         <header className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div>
