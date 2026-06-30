@@ -874,6 +874,7 @@ export function ChatRoom({
                 <li key={o.id}>
                   <Link
                     to="/operations"
+                    search={{ operation_id: o.id } as any}
                     className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-2"
                   >
                     <ShieldAlert className="h-3 w-3 text-[color:var(--color-warning)]" />
