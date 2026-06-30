@@ -416,7 +416,7 @@ export function ChatRoom({
         : priority === "alerta"
           ? `[ALERTA] ${text}`
           : text;
-    clientRef.current?.send(decorated);
+    if (!clientRef.current?.send(decorated)) return;
     setMessages((prev) => [
       ...prev,
       normalizeMsg(
@@ -450,7 +450,7 @@ export function ChatRoom({
         : priority === "alerta"
           ? `[ALERTA] ${payload}`
           : payload;
-    clientRef.current?.send(decorated);
+    if (!clientRef.current?.send(decorated)) return;
     setMessages((prev) => [
       ...prev,
       normalizeMsg(

@@ -13,7 +13,7 @@ export type WSStatus = "idle" | "connecting" | "connected" | "reconnecting" | "e
 
 export interface ChatClient {
   status: () => WSStatus;
-  send: (text: string) => void;
+  send: (text: string) => boolean;
   close: () => void;
   reconnect: () => void;
 }
@@ -105,7 +105,26 @@ export function connectChannel(
   return {
     status: () => status,
     send: (text: string) => {
-      // ... permanece igual
+      const body = text.trim();
+      if (!body) return false;
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        onEvent({
+          type: "ERROR",
+          error: "Canal indisponivel. Aguarde a reconexao antes de enviar.",
+        });
+        return false;
+      }
+
+      ws.send(
+        JSON.stringify({
+          type: "SEND_MESSAGE",
+          usuario: "web",
+          timestamp_iso: new Date().toISOString(),
+          corpo_texto: body,
+        }),
+      );
+      return true;
     },
     close: () => {
       closedByUser = true;
