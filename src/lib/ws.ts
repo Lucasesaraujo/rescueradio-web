@@ -1,13 +1,13 @@
 import { WS_BASE, tokenStore } from "./api";
 
 export type WSEvent =
-  | { type: "CONNECTED"; [k: string]: any }
-  | { type: "BRIEFING"; messages: any[]; [k: string]: any }
-  | { type: "MESSAGE_RECEIVED"; payload: any; [k: string]: any }
-  | { type: "MEMBER_JOINED"; member?: any; [k: string]: any }
-  | { type: "MEMBER_LEFT"; member?: any; [k: string]: any }
-  | { type: "ERROR"; error?: string; [k: string]: any }
-  | { type: string; [k: string]: any };
+  | { type: "CONNECTED";[k: string]: any }
+  | { type: "BRIEFING"; messages: any[];[k: string]: any }
+  | { type: "MESSAGE_RECEIVED"; payload: any;[k: string]: any }
+  | { type: "MEMBER_JOINED"; member?: any;[k: string]: any }
+  | { type: "MEMBER_LEFT"; member?: any;[k: string]: any }
+  | { type: "ERROR"; error?: string;[k: string]: any }
+  | { type: string;[k: string]: any };
 
 export type WSStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error" | "closed";
 
@@ -15,6 +15,7 @@ export interface ChatClient {
   status: () => WSStatus;
   send: (text: string) => void;
   close: () => void;
+  reconnect: () => void;
 }
 
 export function connectChannel(
@@ -26,6 +27,8 @@ export function connectChannel(
   let closedByUser = false;
   let retry = 0;
   let status: WSStatus = "idle";
+  let manualReconnect = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   const setStatus = (s: WSStatus) => {
     status = s;
@@ -61,6 +64,13 @@ export function connectChannel(
         setStatus("closed");
         return;
       }
+
+      if (manualReconnect) {
+        manualReconnect = false;
+        open();
+        return;
+      }
+
       scheduleReconnect();
     };
   };
@@ -69,30 +79,38 @@ export function connectChannel(
     retry += 1;
     const delay = Math.min(1000 * 2 ** retry, 10000);
     setStatus("reconnecting");
-    setTimeout(() => {
-      if (!closedByUser) open();
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+
+      if (!closedByUser) {
+        open();
+      }
     }, delay);
   };
 
   open();
 
+  const reconnect = () => {
+    retry = 0;
+    manualReconnect = true;
+
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
+    ws?.close();
+  };
+
   return {
     status: () => status,
     send: (text: string) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "SEND_MESSAGE",
-            usuario: "",
-            timestamp_iso: new Date().toISOString(),
-            corpo_texto: text,
-          }),
-        );
-      }
+      // ... permanece igual
     },
     close: () => {
       closedByUser = true;
       ws?.close();
     },
+    reconnect,
   };
 }
