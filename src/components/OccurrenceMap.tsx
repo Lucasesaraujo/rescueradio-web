@@ -44,10 +44,10 @@ function beaconIcon(priority: string, selected: boolean, isNew: boolean) {
   ]
     .filter(Boolean)
     .join(" ");
-  const size = priority === "medio" || priority === "normal" ? 14 : 22;
+  const size = priority === "medio" || priority === "normal" ? 44 : 54;
   return L.divIcon({
     className: "",
-    html: `<div class="${cls}" style="--rr-c:${color}"><div class="pulse"></div><div class="pulse delay"></div><div class="core"></div></div>`,
+    html: `<div class="rr-beacon-wrap"><div class="${cls}" style="--rr-c:${color}"><div class="pulse"></div><div class="pulse delay"></div><div class="core"></div></div></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -224,7 +224,10 @@ export function OccurrenceMap({
   }, [coverageSig]);
 
   const sig = useMemo(
-    () => markers.map((m) => `${m.id}:${m.lat}:${m.lng}:${m.priority}`).join("|"),
+    () =>
+      markers
+        .map((m) => `${m.id}:${m.lat}:${m.lng}:${m.priority}:${m.status}:${m.outcome || ""}`)
+        .join("|"),
     [markers],
   );
 
