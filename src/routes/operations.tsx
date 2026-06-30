@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AuthGuard } from "@/components/RoleGuard";
 import { Shell } from "@/components/Shell";
@@ -22,6 +22,8 @@ export const Route = createFileRoute("/operations")({
 
 function OperationsPage() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const routeSearch = useRouterState({ select: (s) => s.location.search as any });
   const [ops, setOps] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
@@ -31,6 +33,23 @@ function OperationsPage() {
   const [outcome, setOutcome] = useState<"success" | "failure">("success");
   const [closeError, setCloseError] = useState("");
   const [, setTick] = useState(0);
+  const routeOperationId = getOperationId(routeSearch);
+
+  const selectOperation = (operation: any) => {
+    setSelected(operation);
+    setCreating(false);
+    navigate({
+      to: "/operations",
+      search: { operation_id: operation.id } as any,
+      replace: true,
+    });
+  };
+
+  const startCreating = () => {
+    setCreating(true);
+    setSelected(null);
+    navigate({ to: "/operations", search: {} as any, replace: true });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,10 +77,9 @@ function OperationsPage() {
       if (!ops.length) setSelected(null);
       return;
     }
-    const operationId = new URLSearchParams(window.location.search).get("operation_id");
     const currentStillExists = selected && ops.some((item) => item.id === selected.id);
-    const op = operationId
-      ? ops.find((item) => item.id === operationId)
+    const op = routeOperationId
+      ? ops.find((item) => item.id === routeOperationId)
       : currentStillExists
         ? null
         : ops[0];
@@ -69,7 +87,7 @@ function OperationsPage() {
       setSelected(op);
       setCreating(false);
     }
-  }, [ops, creating, selected]);
+  }, [ops, creating, selected, routeOperationId]);
 
   useEffect(() => {
     if (!selected || selected.status === "closed") return;
@@ -123,10 +141,7 @@ function OperationsPage() {
             </button>
             {canCommand && (
               <button
-                onClick={() => {
-                  setCreating(true);
-                  setSelected(null);
-                }}
+                onClick={startCreating}
                 className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground"
               >
                 <Plus className="h-3.5 w-3.5" /> Nova
@@ -144,10 +159,7 @@ function OperationsPage() {
               return (
                 <li key={o.id}>
                   <button
-                    onClick={() => {
-                      setSelected(o);
-                      setCreating(false);
-                    }}
+                    onClick={() => selectOperation(o)}
                     className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2 ${sel ? "bg-surface-2" : ""}`}
                   >
                     <Radio className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
@@ -270,6 +282,13 @@ function formatDuration(start: string) {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
+}
+
+function getOperationId(search: any) {
+  if (typeof search === "string") {
+    return new URLSearchParams(search).get("operation_id") || "";
+  }
+  return search?.operation_id ? String(search.operation_id) : "";
 }
 
 function userParticipates(op: any, user: any, profile: any) {
