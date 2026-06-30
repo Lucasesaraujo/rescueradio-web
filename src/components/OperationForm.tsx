@@ -4,6 +4,7 @@ import { OccurrenceMap } from "./OccurrenceMap";
 import { OperatorSelector } from "./OperatorSelector";
 import { MapPin, Loader2 } from "lucide-react";
 import { normalizeOperation } from "@/lib/rescueradio";
+import { searchDemoPlaces, type DemoPlace } from "@/lib/demoPlaces";
 
 const DEFAULT_CENTER: [number, number] = [-8.0476, -34.877];
 
@@ -32,6 +33,7 @@ export function OperationForm({ onCreated }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedBase = bases.find((base) => base.id === baseId);
+  const demoPlaceResults = useMemo(() => searchDemoPlaces(endereco).slice(0, 3), [endereco]);
   const baseCenter = useMemo<[number, number]>(() => {
     const lat = Number(selectedBase?.latitude);
     const lng = Number(selectedBase?.longitude);
@@ -94,6 +96,11 @@ export function OperationForm({ onCreated }: Props) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const applyDemoPlace = (place: DemoPlace) => {
+    setEndereco(place.address);
+    setCoord({ lat: place.latitude, lng: place.longitude });
   };
 
   return (
@@ -170,11 +177,31 @@ export function OperationForm({ onCreated }: Props) {
             value={endereco}
             onChange={(e) => setEndereco(e.target.value)}
             className={inputCls}
-            placeholder="Rua, numero, bairro"
+            placeholder="Rua, numero, bairro ou CIn UFPE"
           />
+          {demoPlaceResults.length > 0 && (
+            <div className="mt-2 space-y-1 rounded-md border border-border bg-background p-1">
+              {demoPlaceResults.map((place) => (
+                <button
+                  key={place.id}
+                  type="button"
+                  onClick={() => applyDemoPlace(place)}
+                  className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left transition hover:bg-surface-2"
+                >
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-semibold">{place.label}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {place.address}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mt-1 text-[11px] text-muted-foreground">
-            Endereco usado como registro textual. A localizacao operacional e definida pelo ponto no
-            mapa.
+            Digite "CIn" ou "UFPE" para usar o local de demonstracao, ou clique no mapa para ajustar
+            manualmente.
           </div>
         </Field>
         <Field label="Descricao">
