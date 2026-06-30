@@ -146,7 +146,8 @@ export function Shell({ children }: { children: ReactNode }) {
       if (!operationId) return;
       if (
         seenAssignments.current.has(operationId) ||
-        assignmentAcknowledged(user.username, operationId)
+        assignmentAcknowledged(user.username, operationId) ||
+        (await assignmentAcknowledgedOnServer(operationId))
       ) {
         seenAssignments.current.add(operationId);
         return;
@@ -523,6 +524,17 @@ function assignmentAcknowledged(username: string, operationId: string) {
   }
 }
 
+async function assignmentAcknowledgedOnServer(operationId: string) {
+  try {
+    const result = await api<{ acknowledged?: boolean }>(
+      `/operations/${operationId}/assignment-ack`,
+    );
+    return !!result.acknowledged;
+  } catch {
+    return false;
+  }
+}
+
 function acknowledgeAssignment(username: string | undefined, operationId: string) {
   if (!username) return;
   try {
@@ -530,6 +542,9 @@ function acknowledgeAssignment(username: string | undefined, operationId: string
   } catch {
     // Local storage can be unavailable in hardened browsers.
   }
+  api(`/operations/${operationId}/assignment-ack`, { method: "POST" }).catch(() => {
+    // Local acknowledgement still prevents repeated modals on this device.
+  });
 }
 
 function userParticipates(op: any, user: any, profile: any) {
