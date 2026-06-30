@@ -3,6 +3,7 @@ import { AuthGuard } from "@/components/RoleGuard";
 import { Shell } from "@/components/Shell";
 import { useEffect, useState } from "react";
 import { Activity, ExternalLink, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 export const Route = createFileRoute("/observability")({
   component: () => (
@@ -14,20 +15,32 @@ export const Route = createFileRoute("/observability")({
   ),
 });
 
-const SERVICES = [
-  { name: "API", url: "http://localhost:8000/health", desc: "FastAPI principal" },
-  { name: "Swagger", url: "http://localhost:8000/docs", desc: "Documentacao interativa da API" },
-  { name: "Kong", url: "http://localhost:8001/health", desc: "Gateway de roteamento" },
-  { name: "Prometheus", url: "http://localhost:9090", desc: "Metricas em /metrics" },
-  { name: "Grafana", url: "http://localhost:3000", desc: "Dashboards visuais" },
-  { name: "Loki", url: "http://localhost:3100/ready", desc: "Status do agregador de logs" },
-];
+function serviceUrl(port: string, path = "") {
+  if (typeof window === "undefined") return `http://localhost:${port}${path}`;
+  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
+}
+
+function apiRoot() {
+  return API_BASE.replace(/\/api\/?$/, "");
+}
+
+function services() {
+  const root = apiRoot();
+  return [
+    { name: "API", url: `${root}/health`, desc: "FastAPI principal" },
+    { name: "Swagger", url: `${root}/docs`, desc: "Documentacao interativa da API" },
+    { name: "Kong", url: `${root}/health`, desc: "Gateway de roteamento" },
+    { name: "Prometheus", url: serviceUrl("9090"), desc: "Metricas em /metrics" },
+    { name: "Grafana", url: serviceUrl("3000"), desc: "Dashboards visuais" },
+    { name: "Loki", url: serviceUrl("3100", "/ready"), desc: "Status do agregador de logs" },
+  ];
+}
 
 function ObsPage() {
   const [statuses, setStatuses] = useState<Record<string, "ok" | "down" | "checking">>({});
 
   useEffect(() => {
-    SERVICES.forEach((s) => {
+    services().forEach((s) => {
       setStatuses((p) => ({ ...p, [s.name]: "checking" }));
       fetch(s.url, { mode: "no-cors" })
         .then(() => setStatuses((p) => ({ ...p, [s.name]: "ok" })))
@@ -44,7 +57,7 @@ function ObsPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {SERVICES.map((s) => {
+        {services().map((s) => {
           const st = statuses[s.name] || "checking";
           return (
             <a
