@@ -463,9 +463,21 @@ export function ChatRoom({
     }
     if (status === "reconnecting" || status === "error") {
       return (
-        <div className="flex items-center gap-2 border-b border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning)]/10 px-4 py-2 text-xs text-[color:var(--color-warning)]">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span className="font-medium">Conexao perdida. Tentando restabelecer canal...</span>
+        <div className="flex items-center justify-between border-b border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning)]/10 px-4 py-2 text-xs text-[color:var(--color-warning)]">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span className="font-medium">
+              Conexão perdida. Tentando restabelecer canal...
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => clientRef.current?.reconnect()}
+            className="rounded border border-[color:var(--color-warning)] bg-background px-3 py-1 text-[11px] font-semibold text-[color:var(--color-warning)] transition hover:bg-[color:var(--color-warning)]/10"
+          >
+            Reconectar agora
+          </button>
         </div>
       );
     }
@@ -507,7 +519,7 @@ export function ChatRoom({
                 const isMine =
                   m.username === user?.username ||
                   m.author ===
-                    (profile?.operational_name || profile?.nome_operacional || user?.display_name);
+                  (profile?.operational_name || profile?.nome_operacional || user?.display_name);
                 const showLiveDivider =
                   idx === liveStartIdx && briefingCount > 0 && messages.length > briefingCount;
                 const showBriefingHeader = idx === 0 && briefingCount > 0;
