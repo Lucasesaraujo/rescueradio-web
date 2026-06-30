@@ -16,6 +16,8 @@ import {
   Lock,
   Clock3,
   Trash2,
+  Paperclip,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
@@ -34,6 +36,7 @@ export interface ChatMessage {
   kind: "live" | "briefing" | "system" | "alert" | "critical";
   priority?: "normal" | "alerta" | "critico";
   mine?: boolean;
+  attachment?: MockAttachment;
 }
 
 export interface Member {
@@ -59,6 +62,13 @@ interface Props {
 
 type Priority = "normal" | "alerta" | "critico";
 
+interface MockAttachment {
+  id: string;
+  label: string;
+  description: string;
+  src: string;
+}
+
 const QUICK_COMMANDS = [
   "QAP?",
   "A caminho",
@@ -68,9 +78,56 @@ const QUICK_COMMANDS = [
   "Encerrando atendimento",
 ];
 
+const MOCK_ATTACHMENTS: MockAttachment[] = [
+  {
+    id: "comandante-professor-ordem",
+    label: "Comandante dando ordem",
+    description: "Professor coordenando a resposta pela central.",
+    src: "/mock-operation/01-comandante-professor-ordem.png",
+  },
+  {
+    id: "operador-bruno-chegando-local",
+    label: "Operador chegando ao local",
+    description: "Bruno chegando ao ponto da ocorrencia.",
+    src: "/mock-operation/02-operador-bruno-chegando-local.png",
+  },
+  {
+    id: "gabriel-mal-estar-clinico",
+    label: "Vitima com mal-estar",
+    description: "Gabriel em atendimento inicial por mal-estar clinico.",
+    src: "/mock-operation/03-gabriel-mal-estar-clinico.png",
+  },
+  {
+    id: "bruno-gabriel-pos-atendimento",
+    label: "Atendimento concluido",
+    description: "Bruno e Gabriel apos estabilizacao da ocorrencia.",
+    src: "/mock-operation/04-bruno-gabriel-pos-atendimento.png",
+  },
+];
+
+const ATTACHMENT_PREFIX = "[[RR_ATTACHMENT:";
+
+function getAttachment(id?: string): MockAttachment | undefined {
+  return MOCK_ATTACHMENTS.find((attachment) => attachment.id === id);
+}
+
+function encodeAttachment(attachment: MockAttachment, caption: string) {
+  return `${ATTACHMENT_PREFIX}${attachment.id}]] ${caption}`.trim();
+}
+
+function extractAttachment(text: string) {
+  const match = text.match(/^\s*\[\[RR_ATTACHMENT:([a-z0-9-]+)\]\]\s*/i);
+  if (!match) return { text, attachment: undefined };
+  return {
+    text: text.slice(match[0].length).trim(),
+    attachment: getAttachment(match[1]),
+  };
+}
+
 function normalizeMsg(m: any, fallbackKind: ChatMessage["kind"] = "live"): ChatMessage {
   const normalized = normalizeChatMessage(m, fallbackKind);
-  const text = (normalized.text || "").replace(/^\s*\[(CRITICO|ALERTA)\]\s*/i, "");
+  const textWithoutPriority = (normalized.text || "").replace(/^\s*\[(CRITICO|ALERTA)\]\s*/i, "");
+  const { text, attachment } = extractAttachment(textWithoutPriority);
   let priority: Priority | undefined = m.priority || m.prioridade;
   if (!priority && /^\s*\[CRITICO\]/i.test(normalized.text || "")) priority = "critico";
   if (!priority && /^\s*\[ALERTA\]/i.test(normalized.text || "")) priority = "alerta";
@@ -87,6 +144,7 @@ function normalizeMsg(m: any, fallbackKind: ChatMessage["kind"] = "live"): ChatM
     channel: normalized.channel,
     kind,
     priority,
+    attachment,
   };
 }
 
@@ -160,6 +218,7 @@ export function ChatRoom({
   const [clockTick, setClockTick] = useState(0);
   const [confirmState, setConfirmState] = useState<ConfirmDialogState | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
 
   const clientRef = useRef<ReturnType<typeof connectChannel> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -381,6 +440,41 @@ export function ChatRoom({
     inputRef.current?.focus();
   };
 
+  const sendAttachment = (attachment: MockAttachment) => {
+    if (readOnly || status !== "connected") return;
+    const caption = input.trim();
+    const payload = encodeAttachment(attachment, caption);
+    const decorated =
+      priority === "critico"
+        ? `[CRITICO] ${payload}`
+        : priority === "alerta"
+          ? `[ALERTA] ${payload}`
+          : payload;
+    clientRef.current?.send(decorated);
+    setMessages((prev) => [
+      ...prev,
+      normalizeMsg(
+        {
+          corpo_texto: decorated,
+          usuario:
+            profile?.operational_name ||
+            profile?.nome_operacional ||
+            user?.display_name ||
+            user?.username ||
+            "OP",
+          username: user?.username,
+          timestamp_iso: new Date().toISOString(),
+          priority,
+        },
+        "live",
+      ),
+    ]);
+    setInput("");
+    setPriority("normal");
+    setAttachmentPickerOpen(false);
+    inputRef.current?.focus();
+  };
+
   const clearChat = async () => {
     setConfirmState({
       title: "Limpar chat",
@@ -572,7 +666,65 @@ export function ChatRoom({
                 </div>
               </div>
 
+              {attachmentPickerOpen && (
+                <div className="rounded-md border border-border bg-background p-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Anexos mockados da operacao
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Se houver texto digitado, ele sera enviado como legenda.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAttachmentPickerOpen(false)}
+                      className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {MOCK_ATTACHMENTS.map((attachment) => (
+                      <button
+                        key={attachment.id}
+                        type="button"
+                        onClick={() => sendAttachment(attachment)}
+                        disabled={status !== "connected"}
+                        className="group overflow-hidden rounded-md border border-border bg-surface text-left transition hover:border-primary/60 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <img
+                          src={attachment.src}
+                          alt={attachment.label}
+                          className="h-20 w-full object-cover transition group-hover:scale-[1.02]"
+                        />
+                        <div className="space-y-0.5 p-2">
+                          <div className="truncate text-xs font-semibold">{attachment.label}</div>
+                          <div className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+                            {attachment.description}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAttachmentPickerOpen((value) => !value)}
+                  disabled={status !== "connected"}
+                  className={cn(
+                    "inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50",
+                    attachmentPickerOpen && "border-primary/60 bg-primary/10 text-primary",
+                  )}
+                  title="Anexar foto mockada"
+                  aria-label="Anexar foto mockada"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
                 <div className="flex flex-1 items-end gap-2 rounded-md border border-border bg-background px-3 py-2 focus-within:border-primary">
                   <textarea
                     ref={inputRef}
@@ -933,10 +1085,36 @@ function TransmissionRow({ msg }: { msg: ChatMessage }) {
             </span>
           )}
         </div>
-        <div className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-foreground">
-          {msg.text}
-        </div>
+        {msg.text && (
+          <div className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-foreground">
+            {msg.text}
+          </div>
+        )}
+        {msg.attachment && <AttachmentPreview attachment={msg.attachment} />}
       </div>
     </div>
+  );
+}
+
+function AttachmentPreview({ attachment }: { attachment: MockAttachment }) {
+  return (
+    <a
+      href={attachment.src}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-2 block max-w-md overflow-hidden rounded-md border border-border bg-background transition hover:border-primary/60"
+    >
+      <div className="flex items-center gap-2 border-b border-border px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        <ImageIcon className="h-3.5 w-3.5 text-primary" />
+        Anexo de operacao
+      </div>
+      <img src={attachment.src} alt={attachment.label} className="max-h-64 w-full object-cover" />
+      <div className="space-y-0.5 px-2 py-2">
+        <div className="text-xs font-semibold text-foreground">{attachment.label}</div>
+        <div className="text-[11px] leading-snug text-muted-foreground">
+          {attachment.description}
+        </div>
+      </div>
+    </a>
   );
 }
